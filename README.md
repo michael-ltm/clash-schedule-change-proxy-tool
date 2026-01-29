@@ -19,7 +19,7 @@ A cross-platform GUI tool for automatically switching Clash proxies at scheduled
 
 ### Screenshots
 
-<img src="docs/screenshot.png" width="400" alt="Screenshot">
+<img src="docs/screenshot-en.png" width="400" alt="Screenshot English">
 
 ### Installation
 
@@ -106,7 +106,7 @@ MIT License
 
 ### 截图
 
-<img src="docs/screenshot.png" width="400" alt="截图">
+<img src="docs/screenshot-zh.png" width="400" alt="截图">
 
 ### 安装
 
