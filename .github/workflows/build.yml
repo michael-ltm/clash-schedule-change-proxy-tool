@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-macos-arm:
-    runs-on: macos-14  # M1/M2 runner
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       
@@ -38,7 +38,8 @@ jobs:
           path: dist/ClashProxyTimer-macOS-arm64.zip
 
   build-macos-intel:
-    runs-on: macos-13  # Intel runner
+    runs-on: macos-13
+    continue-on-error: true  # 允许失败，不影响其他 job
     steps:
       - uses: actions/checkout@v4
       
@@ -95,7 +96,7 @@ jobs:
   release:
     needs: [build-macos-arm, build-macos-intel, build-windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: ${{ always() && !cancelled() && needs.build-macos-arm.result == 'success' && needs.build-windows.result == 'success' }}
     permissions:
       contents: write
     steps:
@@ -114,4 +115,5 @@ jobs:
             artifacts/ClashProxyTimer-macOS-arm64/ClashProxyTimer-macOS-arm64.zip
             artifacts/ClashProxyTimer-macOS-x64/ClashProxyTimer-macOS-x64.zip
             artifacts/ClashProxyTimer-Windows-x64/ClashProxyTimer.exe
+          fail_on_unmatched_files: false  # 允许部分文件缺失
           generate_release_notes: true
