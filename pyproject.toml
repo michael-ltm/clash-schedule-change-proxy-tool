@@ -19,7 +19,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Internet :: Proxy Servers",
 ]
-readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "requests>=2.28.0",
