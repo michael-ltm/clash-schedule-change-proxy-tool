@@ -29,7 +29,6 @@ Download the latest release for your platform from [Releases](https://github.com
 
 - **Windows**: `ClashProxyTimer.exe`
 - **macOS (Apple Silicon)**: `ClashProxyTimer-macOS-arm64.zip`
-- **macOS (Intel)**: `ClashProxyTimer-macOS-x64.zip`
 
 #### Run from Source
 
@@ -117,7 +116,6 @@ MIT License
 
 - **Windows**: `ClashProxyTimer.exe`
 - **macOS (Apple Silicon)**: `ClashProxyTimer-macOS-arm64.zip`
-- **macOS (Intel)**: `ClashProxyTimer-macOS-x64.zip`
 
 #### 从源码运行
 
