@@ -18,7 +18,7 @@ from i18n import t, init_language, set_language, get_language, SUPPORTED_LANGUAG
 
 logger = logging.getLogger(__name__)
 
-# 设置主题
+# 设置主题 - 渐变现代风格
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -88,78 +88,128 @@ class IntervalProxyGUI:
             self.config.save()
     
     def _create_widgets(self):
-        """创建界面组件"""
+        """创建界面组件 - 现代渐变风格"""
         # ===== 头部状态栏 =====
         header = ctk.CTkFrame(self.root, fg_color="transparent")
-        header.pack(fill="x", padx=20, pady=(16, 8))
+        header.pack(fill="x", padx=24, pady=(20, 10))
         
+        # 标题带渐变效果（使用特殊字符模拟）
         ctk.CTkLabel(
             header, 
             text=t("app_title"),
-            font=ctk.CTkFont(size=18, weight="bold")
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color="#6B46FF"
         ).pack(side="left")
         
-        # 语言切换
+        # 语言切换按钮 - 圆形
         self.lang_btn = ctk.CTkButton(
             header,
             text="EN" if get_language() == "zh_CN" else "中",
-            width=28,
-            height=28,
-            corner_radius=14,
-            fg_color="#333333",
-            hover_color="#444444",
+            width=32,
+            height=32,
+            corner_radius=16,
+            fg_color="#2D2D3D",
+            hover_color="#3D3D4D",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            border_width=2,
+            border_color="#4D4D5D",
             command=self._toggle_language
         )
         self.lang_btn.pack(side="right", padx=(4, 0))
         
-        # 状态
+        # 状态指示器
         self.status_indicator = ctk.CTkLabel(
             header,
             text=t("status_detecting"),
             font=ctk.CTkFont(size=11),
-            text_color="#888888"
+            text_color="#999999"
         )
-        self.status_indicator.pack(side="right", padx=(0, 6))
+        self.status_indicator.pack(side="right", padx=(0, 8))
         
+        # 设置按钮 - 圆形
         self.settings_btn = ctk.CTkButton(
             header,
             text="⚙",
-            width=28,
-            height=28,
-            corner_radius=14,
+            width=32,
+            height=32,
+            corner_radius=16,
             fg_color="transparent",
-            hover_color="#333333",
+            hover_color="#2D2D3D",
+            font=ctk.CTkFont(size=16),
+            border_width=2,
+            border_color="#3D3D4D",
             command=self._toggle_settings
         )
         self.settings_btn.pack(side="right")
         
-        # ===== 连接设置（默认隐藏）=====
-        self.settings_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        # ===== 连接设置（默认隐藏）- 渐变卡片样式 =====
+        self.settings_frame = ctk.CTkFrame(
+            self.root, 
+            corner_radius=16,
+            fg_color="#1E1E2E",
+            border_width=2,
+            border_color="#2D2D3D"
+        )
         
         settings_inner = ctk.CTkFrame(self.settings_frame, fg_color="transparent")
-        settings_inner.pack(fill="x", padx=14, pady=14)
+        settings_inner.pack(fill="x", padx=18, pady=16)
         
         # 地址端口行
         row1 = ctk.CTkFrame(settings_inner, fg_color="transparent")
-        row1.pack(fill="x", pady=3)
+        row1.pack(fill="x", pady=4)
         
-        ctk.CTkLabel(row1, text=t("host"), width=45, anchor="w", font=ctk.CTkFont(size=12)).pack(side="left")
-        self.host_entry = ctk.CTkEntry(row1, width=110, height=28)
+        ctk.CTkLabel(
+            row1, text=t("host"), width=50, anchor="w", 
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#8B8B9B"
+        ).pack(side="left")
+        self.host_entry = ctk.CTkEntry(
+            row1, width=110, height=32,
+            corner_radius=8,
+            border_width=2,
+            border_color="#3D3D4D"
+        )
         self.host_entry.pack(side="left", padx=(0, 12))
         
-        ctk.CTkLabel(row1, text=t("port"), width=35, anchor="w", font=ctk.CTkFont(size=12)).pack(side="left")
-        self.port_entry = ctk.CTkEntry(row1, width=65, height=28)
+        ctk.CTkLabel(
+            row1, text=t("port"), width=40, anchor="w", 
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#8B8B9B"
+        ).pack(side="left")
+        self.port_entry = ctk.CTkEntry(
+            row1, width=70, height=32,
+            corner_radius=8,
+            border_width=2,
+            border_color="#3D3D4D"
+        )
         self.port_entry.pack(side="left")
         
         # 密钥行
         row2 = ctk.CTkFrame(settings_inner, fg_color="transparent")
-        row2.pack(fill="x", pady=3)
+        row2.pack(fill="x", pady=4)
         
-        ctk.CTkLabel(row2, text=t("secret"), width=45, anchor="w", font=ctk.CTkFont(size=12)).pack(side="left")
-        self.secret_entry = ctk.CTkEntry(row2, width=140, height=28, show="•", placeholder_text=t("secret_placeholder"))
+        ctk.CTkLabel(
+            row2, text=t("secret"), width=50, anchor="w", 
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#8B8B9B"
+        ).pack(side="left")
+        self.secret_entry = ctk.CTkEntry(
+            row2, width=150, height=32, show="•", 
+            placeholder_text=t("secret_placeholder"),
+            corner_radius=8,
+            border_width=2,
+            border_color="#3D3D4D"
+        )
         self.secret_entry.pack(side="left", padx=(0, 12))
         
-        self.connect_btn = ctk.CTkButton(row2, text=t("reconnect"), width=80, height=28, command=self._reconnect)
+        self.connect_btn = ctk.CTkButton(
+            row2, text=t("reconnect"), width=85, height=32,
+            corner_radius=8,
+            fg_color="#6B46FF",
+            hover_color="#7B56FF",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._reconnect
+        )
         self.connect_btn.pack(side="right")
         
         # 填充设置值
@@ -167,146 +217,227 @@ class IntervalProxyGUI:
         self.port_entry.insert(0, str(self.config.get("clash_port", 9097)))
         self.secret_entry.insert(0, self.config.get("clash_secret", ""))
         
-        # ===== 主设置区 =====
-        main_card = ctk.CTkFrame(self.root, corner_radius=10)
-        main_card.pack(fill="x", padx=20, pady=8)
+        # ===== 主设置区 - 渐变玻璃卡片 =====
+        main_card = ctk.CTkFrame(
+            self.root, 
+            corner_radius=16,
+            fg_color="#1E1E2E",
+            border_width=2,
+            border_color="#2D2D3D"
+        )
+        main_card.pack(fill="x", padx=24, pady=10)
         
         main_inner = ctk.CTkFrame(main_card, fg_color="transparent")
-        main_inner.pack(fill="x", padx=16, pady=14)
+        main_inner.pack(fill="x", padx=20, pady=18)
         
         # 代理组选择
         group_row = ctk.CTkFrame(main_inner, fg_color="transparent")
-        group_row.pack(fill="x", pady=4)
+        group_row.pack(fill="x", pady=6)
         
-        ctk.CTkLabel(group_row, text=t("proxy_group"), font=ctk.CTkFont(size=13)).pack(side="left")
+        ctk.CTkLabel(
+            group_row, text=t("proxy_group"), 
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#CCCCDD"
+        ).pack(side="left")
         
         self.refresh_btn = ctk.CTkButton(
-            group_row, text="↻", width=28, height=28,
-            corner_radius=14, fg_color="#333333",
+            group_row, text="↻", width=32, height=32,
+            corner_radius=16, 
+            fg_color="#2D2D3D",
+            hover_color="#3D3D4D",
+            font=ctk.CTkFont(size=16),
+            border_width=2,
+            border_color="#4D4D5D",
             command=self._refresh_groups
         )
         self.refresh_btn.pack(side="right")
         
         self.group_combo = ctk.CTkComboBox(
-            group_row, values=[], width=180, height=28,
+            group_row, values=[], width=190, height=32,
+            corner_radius=8,
+            border_width=2,
+            border_color="#3D3D4D",
+            button_color="#6B46FF",
+            button_hover_color="#7B56FF",
             command=self._on_group_selected
         )
-        self.group_combo.pack(side="right", padx=6)
+        self.group_combo.pack(side="right", padx=8)
         self.group_combo.set(t("loading"))
         
         # 当前代理显示
         current_row = ctk.CTkFrame(main_inner, fg_color="transparent")
-        current_row.pack(fill="x", pady=4)
+        current_row.pack(fill="x", pady=6)
         
-        ctk.CTkLabel(current_row, text=t("current_node"), font=ctk.CTkFont(size=13)).pack(side="left")
+        ctk.CTkLabel(
+            current_row, text=t("current_node"), 
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#CCCCDD"
+        ).pack(side="left")
         self.current_proxy_label = ctk.CTkLabel(
             current_row, text="-",
-            font=ctk.CTkFont(size=13),
-            text_color="#3B8ED0"
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#6B46FF"
         )
         self.current_proxy_label.pack(side="right")
         
-        # 分隔线
-        ctk.CTkFrame(main_inner, height=1, fg_color="#333333").pack(fill="x", pady=10)
+        # 分隔线 - 渐变效果
+        ctk.CTkFrame(main_inner, height=2, fg_color="#2D2D3D").pack(fill="x", pady=12)
         
         # 切换间隔
         interval_row = ctk.CTkFrame(main_inner, fg_color="transparent")
-        interval_row.pack(fill="x", pady=4)
+        interval_row.pack(fill="x", pady=6)
         
-        ctk.CTkLabel(interval_row, text=t("interval"), font=ctk.CTkFont(size=13)).pack(side="left")
+        ctk.CTkLabel(
+            interval_row, text=t("interval"), 
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#CCCCDD"
+        ).pack(side="left")
         
         interval_input = ctk.CTkFrame(interval_row, fg_color="transparent")
         interval_input.pack(side="right")
         
-        self.interval_entry = ctk.CTkEntry(interval_input, width=55, height=28, justify="center")
+        self.interval_entry = ctk.CTkEntry(
+            interval_input, width=60, height=32, justify="center",
+            corner_radius=8,
+            border_width=2,
+            border_color="#3D3D4D"
+        )
         self.interval_entry.pack(side="left")
         self.interval_entry.insert(0, str(self.config.get("interval_minutes", 30)))
         
-        ctk.CTkLabel(interval_input, text=t("minutes"), font=ctk.CTkFont(size=13)).pack(side="left", padx=(6, 0))
+        ctk.CTkLabel(
+            interval_input, text=t("minutes"), 
+            font=ctk.CTkFont(size=13),
+            text_color="#8B8B9B"
+        ).pack(side="left", padx=(8, 0))
         
         # 检测开关
         check_row = ctk.CTkFrame(main_inner, fg_color="transparent")
-        check_row.pack(fill="x", pady=4)
+        check_row.pack(fill="x", pady=6)
         
-        ctk.CTkLabel(check_row, text=t("check_before_switch"), font=ctk.CTkFont(size=13)).pack(side="left")
+        ctk.CTkLabel(
+            check_row, text=t("check_before_switch"), 
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#CCCCDD"
+        ).pack(side="left")
         
         self.check_var = ctk.BooleanVar(value=self.config.get("check_before_switch", True))
-        self.check_switch = ctk.CTkSwitch(check_row, text="", variable=self.check_var, width=40)
+        self.check_switch = ctk.CTkSwitch(
+            check_row, text="", variable=self.check_var, width=44,
+            progress_color="#6B46FF",
+            button_color="#FFFFFF",
+            button_hover_color="#EEEEEE"
+        )
         self.check_switch.pack(side="right")
         
-        # ===== 控制区域 =====
-        control_card = ctk.CTkFrame(self.root, corner_radius=10)
-        control_card.pack(fill="x", padx=20, pady=8)
+        # ===== 控制区域 - 渐变高光卡片 =====
+        control_card = ctk.CTkFrame(
+            self.root, 
+            corner_radius=16,
+            fg_color="#1E1E2E",
+            border_width=2,
+            border_color="#2D2D3D"
+        )
+        control_card.pack(fill="x", padx=24, pady=10)
         
         control_inner = ctk.CTkFrame(control_card, fg_color="transparent")
-        control_inner.pack(fill="x", padx=16, pady=14)
+        control_inner.pack(fill="x", padx=20, pady=18)
         
-        # 倒计时
+        # 倒计时 - 渐变数字
         self.countdown_label = ctk.CTkLabel(
             control_inner,
             text="--:--",
-            font=ctk.CTkFont(size=42, weight="bold"),
-            text_color="#555555"
+            font=ctk.CTkFont(size=48, weight="bold"),
+            text_color="#4D4D5D"
         )
-        self.countdown_label.pack(pady=(0, 12))
+        self.countdown_label.pack(pady=(0, 16))
         
-        # 主按钮
+        # 主按钮 - 渐变背景
         self.start_btn = ctk.CTkButton(
             control_inner,
             text=t("start_auto"),
-            font=ctk.CTkFont(size=14, weight="bold"),
-            height=44,
-            corner_radius=10,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            height=48,
+            corner_radius=12,
+            fg_color="#6B46FF",
+            hover_color="#7B56FF",
+            border_width=0,
             command=self._toggle_auto_switch
         )
-        self.start_btn.pack(fill="x", pady=3)
+        self.start_btn.pack(fill="x", pady=4)
         
         # 次要按钮组
         btn_row = ctk.CTkFrame(control_inner, fg_color="transparent")
-        btn_row.pack(fill="x", pady=3)
+        btn_row.pack(fill="x", pady=4)
         btn_row.grid_columnconfigure((0, 1), weight=1)
         
         self.switch_now_btn = ctk.CTkButton(
             btn_row,
             text=t("switch_now"),
-            height=36,
-            fg_color="#2B2B2B",
-            hover_color="#383838",
+            height=40,
+            corner_radius=10,
+            fg_color="#2D2D3D",
+            hover_color="#3D3D4D",
+            border_width=2,
+            border_color="#4D4D5D",
+            font=ctk.CTkFont(size=13, weight="bold"),
             command=self._switch_now
         )
-        self.switch_now_btn.grid(row=0, column=0, sticky="ew", padx=(0, 3))
+        self.switch_now_btn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         
         self.test_btn = ctk.CTkButton(
             btn_row,
             text=t("test_all"),
-            height=36,
-            fg_color="#2B2B2B",
-            hover_color="#383838",
+            height=40,
+            corner_radius=10,
+            fg_color="#2D2D3D",
+            hover_color="#3D3D4D",
+            border_width=2,
+            border_color="#4D4D5D",
+            font=ctk.CTkFont(size=13, weight="bold"),
             command=self._test_all_proxies
         )
-        self.test_btn.grid(row=0, column=1, sticky="ew", padx=(3, 0))
+        self.test_btn.grid(row=0, column=1, sticky="ew", padx=(4, 0))
         
-        # ===== 日志区域 =====
-        log_frame = ctk.CTkFrame(self.root, corner_radius=10)
-        log_frame.pack(fill="both", expand=True, padx=20, pady=(8, 16))
+        # ===== 日志区域 - 深色代码风格 =====
+        log_frame = ctk.CTkFrame(
+            self.root, 
+            corner_radius=16,
+            fg_color="#1E1E2E",
+            border_width=2,
+            border_color="#2D2D3D"
+        )
+        log_frame.pack(fill="both", expand=True, padx=24, pady=(10, 20))
         
         log_header = ctk.CTkFrame(log_frame, fg_color="transparent")
-        log_header.pack(fill="x", padx=12, pady=(10, 4))
+        log_header.pack(fill="x", padx=16, pady=(12, 6))
         
-        ctk.CTkLabel(log_header, text=t("log"), font=ctk.CTkFont(size=12)).pack(side="left")
+        ctk.CTkLabel(
+            log_header, text=t("log"), 
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#CCCCDD"
+        ).pack(side="left")
         ctk.CTkButton(
-            log_header, text=t("clear"), width=40, height=20,
-            fg_color="transparent", hover_color="#333333",
-            font=ctk.CTkFont(size=10),
+            log_header, text=t("clear"), width=50, height=24,
+            corner_radius=6,
+            fg_color="transparent", 
+            hover_color="#2D2D3D",
+            border_width=1,
+            border_color="#3D3D4D",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color="#8B8B9B",
             command=self._clear_log
         ).pack(side="right")
         
         self.log_text = ctk.CTkTextbox(
             log_frame,
             font=ctk.CTkFont(family="Menlo", size=11),
-            corner_radius=6
+            corner_radius=10,
+            fg_color="#0D0D1D",
+            border_width=1,
+            border_color="#2D2D3D"
         )
-        self.log_text.pack(fill="both", expand=True, padx=10, pady=(4, 10))
+        self.log_text.pack(fill="both", expand=True, padx=12, pady=(6, 12))
     
     def _toggle_language(self):
         """切换语言"""
@@ -336,14 +467,14 @@ class IntervalProxyGUI:
                 version = self.clash_api.get_version()
                 v = version.get("version", "?") if version else "?"
                 self.root.after(0, lambda: self.status_indicator.configure(
-                    text=f"{t('status_connected')} v{v}", text_color="#4CAF50"
+                    text=f"{t('status_connected')} v{v}", text_color="#5FD068"
                 ))
                 self.root.after(0, self._refresh_groups)
                 self.root.after(0, lambda: self._append_log(t("auto_connected")))
                 self.root.after(0, self._start_sync)
             else:
                 self.root.after(0, lambda: self.status_indicator.configure(
-                    text=t("status_disconnected"), text_color="#F44336"
+                    text=t("status_disconnected"), text_color="#FF4757"
                 ))
                 self.root.after(0, lambda: self._append_log(t("connect_failed_tip")))
                 self.root.after(0, lambda: self.group_combo.set(t("please_connect")))
@@ -441,8 +572,8 @@ class IntervalProxyGUI:
         """切换自动切换"""
         if self.switcher.is_running():
             self.switcher.stop_auto_switch()
-            self.start_btn.configure(text=t("start_auto"), fg_color="#3B8ED0")
-            self.countdown_label.configure(text="--:--", text_color="#555555")
+            self.start_btn.configure(text=t("start_auto"), fg_color="#6B46FF", hover_color="#7B56FF")
+            self.countdown_label.configure(text="--:--", text_color="#4D4D5D")
         else:
             group = self.group_combo.get()
             if group in [t("loading"), t("please_connect"), t("no_proxy_group")]:
@@ -460,8 +591,8 @@ class IntervalProxyGUI:
             self.config.save()
             
             self.switcher.start_auto_switch()
-            self.start_btn.configure(text=t("stop"), fg_color="#E53935")
-            self.countdown_label.configure(text_color="#3B8ED0")
+            self.start_btn.configure(text=t("stop"), fg_color="#FF4757", hover_color="#FF6B7A")
+            self.countdown_label.configure(text_color="#6B46FF")
     
     def _switch_now(self):
         """立即切换"""

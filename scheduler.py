@@ -164,6 +164,8 @@ class ProxySwitcher:
         self.scheduler = ProxyScheduler()
         self._log_callback: Optional[Callable[[str], None]] = None
         self._status_callback: Optional[Callable[[str], None]] = None
+        self._used_proxies: set = set()  # 记录已使用的代理
+        self._all_proxies: set = set()   # 记录所有可用代理
     
     def set_log_callback(self, callback: Callable[[str], None]):
         """设置日志回调"""
@@ -175,11 +177,9 @@ class ProxySwitcher:
     
     def _log(self, message: str):
         """记录日志"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_message = f"[{timestamp}] {message}"
         logger.info(message)
         if self._log_callback:
-            self._log_callback(log_message)
+            self._log_callback(message)
     
     def _update_status(self, status: str):
         """更新状态"""
@@ -188,7 +188,7 @@ class ProxySwitcher:
     
     def switch_proxy(self, group_name: str = None) -> bool:
         """
-        切换代理
+        切换代理 - 优先选择延迟低且未使用的代理
         
         Args:
             group_name: 代理组名称，为 None 时使用配置中的组
@@ -229,46 +229,73 @@ class ProxySwitcher:
             self._update_status("切换失败")
             return False
         
-        # 随机打乱顺序
-        random.shuffle(available_proxies)
+        # 更新所有代理列表
+        self._all_proxies = set(available_proxies)
+        
+        # 检查是否所有代理都已使用过，如果是则重置
+        if self._used_proxies >= self._all_proxies:
+            self._log("所有代理已使用一轮，重置使用记录")
+            self._used_proxies.clear()
         
         # 检查是否需要验证代理可用性
         check_before_switch = self.config.get("check_before_switch", True)
-        max_retry = self.config.get("max_retry", 3)
         
         if check_before_switch:
-            # 找到可用的代理
-            retry_count = 0
-            for proxy_name in available_proxies:
-                if retry_count >= max_retry:
-                    self._log(f"已达到最大重试次数 ({max_retry})")
-                    break
-                
-                self._log(f"检测代理: {proxy_name}")
-                available, message = self.proxy_checker.check_proxy_available(proxy_name)
-                
-                if available:
-                    # 切换到这个代理
-                    if self.clash_api.switch_proxy(group_name, proxy_name):
-                        self._log(f"切换成功: {proxy_name} ({message})")
-                        self._update_status(f"当前: {proxy_name}")
-                        return True
-                    else:
-                        self._log(f"切换失败: {proxy_name}")
-                        retry_count += 1
-                else:
-                    self._log(f"代理不可用: {proxy_name} ({message})")
-                    retry_count += 1
+            # 获取所有代理的延迟信息
+            self._log("正在测试代理延迟...")
+            delay_results = self.proxy_checker.get_all_proxy_delays(available_proxies)
             
-            self._log("错误: 没有找到可用的代理")
+            # 筛选可用的代理，并按延迟排序
+            available_with_delay = []
+            for proxy_name, (available, delay, message) in delay_results.items():
+                if available and delay is not None:
+                    available_with_delay.append((proxy_name, delay))
+            
+            if not available_with_delay:
+                self._log("错误: 没有可用的代理节点")
+                self._update_status("切换失败")
+                return False
+            
+            # 按延迟排序（从低到高）
+            available_with_delay.sort(key=lambda x: x[1])
+            
+            # 优先选择未使用过的代理
+            unused_proxies = [(name, delay) for name, delay in available_with_delay 
+                            if name not in self._used_proxies]
+            
+            # 如果有未使用的代理，使用它们；否则使用所有可用代理
+            candidates = unused_proxies if unused_proxies else available_with_delay
+            
+            self._log(f"找到 {len(candidates)} 个候选代理（未使用: {len(unused_proxies)}）")
+            
+            # 尝试切换到延迟最低的未使用代理
+            for proxy_name, delay in candidates:
+                used_status = "已使用" if proxy_name in self._used_proxies else "未使用"
+                self._log(f"尝试切换: {proxy_name} (延迟: {delay}ms, 状态: {used_status})")
+                
+                if self.clash_api.switch_proxy(group_name, proxy_name):
+                    self._log(f"✓ 切换成功: {proxy_name} (延迟: {delay}ms)")
+                    self._update_status(f"当前: {proxy_name}")
+                    self._used_proxies.add(proxy_name)
+                    return True
+                else:
+                    self._log(f"✗ 切换失败: {proxy_name}")
+            
+            self._log("错误: 所有候选代理切换失败")
             self._update_status("切换失败")
             return False
         else:
-            # 随机选择一个代理
-            proxy_name = random.choice(available_proxies)
+            # 不检测延迟时，优先选择未使用的代理
+            unused_proxies = [p for p in available_proxies if p not in self._used_proxies]
+            candidates = unused_proxies if unused_proxies else available_proxies
+            
+            # 随机选择一个候选代理
+            proxy_name = random.choice(candidates)
+            
             if self.clash_api.switch_proxy(group_name, proxy_name):
                 self._log(f"切换成功: {proxy_name}")
                 self._update_status(f"当前: {proxy_name}")
+                self._used_proxies.add(proxy_name)
                 return True
             else:
                 self._log(f"切换失败: {proxy_name}")
