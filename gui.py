@@ -89,6 +89,8 @@ class IntervalProxyGUI:
         # 同步定时器 ID
         self._sync_timer_id = None
         self._last_proxy = None
+        # 立即切换防抖
+        self._switching = False
 
         # 创建界面
         self._create_widgets()
@@ -97,6 +99,7 @@ class IntervalProxyGUI:
         for sw in (self.clash_switcher, self.ajiasu_switcher):
             sw.set_log_callback(self._append_log)
             sw.set_status_callback(self._update_status)
+            sw.set_on_switched(self._on_switched)
             sw.scheduler.set_on_tick(self._on_tick)
 
         # 绑定关闭事件
@@ -289,6 +292,21 @@ class IntervalProxyGUI:
             interval_input, text=t("minutes"),
             font=ctk.CTkFont(size=13), text_color="#8B8B9B",
         ).pack(side="left", padx=(8, 0))
+
+        # 间隔预设按钮
+        preset_row = ctk.CTkFrame(main_inner, fg_color="transparent")
+        preset_row.pack(fill="x", pady=(2, 6))
+        ctk.CTkLabel(preset_row, text="", width=1).pack(side="left")  # 撑左边距
+        for label, secs in (("10s", 10), ("30s", 30), ("1m", 60), ("5m", 300), ("30m", 1800)):
+            ctk.CTkButton(
+                preset_row, text=label, width=46, height=24,
+                corner_radius=6,
+                fg_color="#2D2D3D", hover_color="#3D3D4D",
+                border_width=1, border_color="#3D3D4D",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color="#CCCCDD",
+                command=lambda s=secs: self._set_interval_preset(s),
+            ).pack(side="right", padx=2)
 
         check_row = ctk.CTkFrame(main_inner, fg_color="transparent")
         check_row.pack(fill="x", pady=6)
@@ -493,6 +511,23 @@ class IntervalProxyGUI:
             command=self._patch_ajiasu,
         ).pack(side="right")
 
+        # 调试行
+        row3 = ctk.CTkFrame(self.ajiasu_settings, fg_color="transparent")
+        row3.pack(fill="x", pady=4, padx=18)
+        ctk.CTkLabel(
+            row3, text=t("ajiasu_debug_hint"),
+            font=ctk.CTkFont(size=11),
+            text_color="#666677",
+        ).pack(side="left")
+        ctk.CTkButton(
+            row3, text=t("ajiasu_dump_raw"), height=28, corner_radius=6,
+            fg_color="transparent", hover_color="#2D2D3D",
+            border_width=1, border_color="#3D3D4D",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#8B8B9B",
+            command=self._dump_ajiasu_raw,
+        ).pack(side="right")
+
         ctk.CTkLabel(self.ajiasu_settings, text="", height=4).pack()
 
     def _show_settings_for_mode(self):
@@ -566,6 +601,7 @@ class IntervalProxyGUI:
                 self.root.after(0, lambda: self.status_indicator.configure(
                     text=f"{t('status_connected')} v{v}", text_color="#5FD068"
                 ))
+                self.root.after(0, lambda: self._set_controls_enabled(True))
                 self.root.after(0, self._refresh_groups)
                 self.root.after(0, lambda: self._append_log(t("auto_connected")))
                 self.root.after(0, self._start_sync)
@@ -573,6 +609,7 @@ class IntervalProxyGUI:
                 self.root.after(0, lambda: self.status_indicator.configure(
                     text=t("status_disconnected"), text_color="#FF4757"
                 ))
+                self.root.after(0, lambda: self._set_controls_enabled(False))
                 self.root.after(0, lambda: self._append_log(t("connect_failed_tip")))
                 self.root.after(0, lambda: self.group_combo.set(t("please_connect")))
                 self.root.after(0, self._stop_sync)
@@ -588,6 +625,7 @@ class IntervalProxyGUI:
                 self.root.after(0, lambda: self.status_indicator.configure(
                     text=t("ajiasu_bridge_online"), text_color="#5FD068"
                 ))
+                self.root.after(0, lambda: self._set_controls_enabled(True))
                 self.root.after(0, self._refresh_groups)
                 self.root.after(0, lambda: self._append_log(t("ajiasu_bridge_online")))
                 self.root.after(0, self._start_sync)
@@ -595,6 +633,7 @@ class IntervalProxyGUI:
                 self.root.after(0, lambda: self.status_indicator.configure(
                     text=t("ajiasu_bridge_offline"), text_color="#FF4757"
                 ))
+                self.root.after(0, lambda: self._set_controls_enabled(False))
                 self.root.after(0, lambda: self._append_log(t("ajiasu_bridge_offline_tip")))
                 self.root.after(0, lambda: self.group_combo.set(t("please_connect")))
                 self.root.after(0, self._stop_sync)
@@ -621,12 +660,17 @@ class IntervalProxyGUI:
                         self.root.after(0, lambda: self.status_indicator.configure(
                             text=t("ajiasu_bridge_online"), text_color="#5FD068"
                         ))
+                        self.root.after(0, lambda: self._set_controls_enabled(True))
                     else:
                         self.root.after(0, lambda: self.status_indicator.configure(
                             text=t("ajiasu_bridge_offline"), text_color="#FF4757"
                         ))
+                        self.root.after(0, lambda: self._set_controls_enabled(False))
                         # 桥不在线就别再去 IPC,免得 8s 超时阻塞 sync 线程
                         return
+                else:
+                    # Clash 模式:在线就启用按钮(连接失败时 _init_clash_connection 已经禁用过)
+                    self.root.after(0, lambda: self._set_controls_enabled(True))
 
                 group = self.group_combo.get()
                 placeholders = (t("loading"), t("please_connect"), t("no_proxy_group"))
@@ -750,7 +794,66 @@ class IntervalProxyGUI:
         self._refresh_ajiasu_bridge_status()
         self._update_ajiasu_banner()
         if ok:
+            # 记录"曾经成功打过补丁",用于检测后续被覆盖
+            self.config.set("ajiasu_patch_ever_installed", True)
+            self.config.save()
             self._append_log(t("ajiasu_patch_done_tip"))
+            # 询问是否立即启动 AJiaSu.exe
+            try:
+                yes = messagebox.askyesno(
+                    title=t("ajiasu_patch_done_title"),
+                    message=t("ajiasu_patch_done_launch_msg"),
+                )
+            except Exception:
+                yes = False
+            if yes:
+                self._launch_ajiasu(d)
+
+    def _dump_ajiasu_raw(self):
+        """把桥拿到的原始 JSON (server 列表 + 状态) 写到 %TEMP% 下,便于排查字段名映射。"""
+        import json
+        import tempfile
+        if not self.ajiasu_api.is_alive():
+            self._append_log(t("ajiasu_bridge_offline"))
+            return
+
+        def do_dump():
+            try:
+                servers = self.ajiasu_api.get_all_servers()
+                status = self.ajiasu_api.get_status()
+                fav = self.ajiasu_api.get_favorite_ids()
+                rec = self.ajiasu_api.get_recent_ids()
+                payload = {
+                    "servers": servers, "status": status,
+                    "favorites": fav, "recent": rec,
+                }
+                out = Path(tempfile.gettempdir()) / "ajiasu_raw.json"
+                out.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                               encoding="utf-8")
+                self.root.after(0, lambda: self._append_log(t("ajiasu_dump_done", path=str(out))))
+            except Exception as e:
+                self.root.after(0, lambda: self._append_log(f"导出失败: {e}"))
+
+        threading.Thread(target=do_dump, daemon=True).start()
+
+    def _launch_ajiasu(self, install_dir: Path):
+        """拉起 AJiaSu.exe;失败的话只在日志里报。"""
+        import subprocess
+        exe = install_dir / "AJiaSu.exe"
+        if not exe.exists():
+            self._append_log(f"未找到 {exe}")
+            return
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(
+                    [str(exe)], cwd=str(install_dir),
+                    creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
+                )
+            else:
+                subprocess.Popen([str(exe)], cwd=str(install_dir))
+            self._append_log(t("ajiasu_launching"))
+        except Exception as e:
+            self._append_log(f"启动 AJiaSu.exe 失败: {e}")
 
     def _prompt_relaunch_as_admin(self, target_path: Path):
         """弹窗提示用户以管理员身份重启,确认则提权重启并退出当前进程。"""
@@ -822,6 +925,9 @@ class IntervalProxyGUI:
             patched = False
         if patched:
             hide()
+        elif self.config.get("ajiasu_patch_ever_installed", False):
+            # 之前打过补丁,现在又没了 → 多半是 AJiaSu 升级覆盖
+            show(t("ajiasu_patch_overwritten"))
         else:
             show(t("ajiasu_banner_unpatched"))
 
@@ -906,6 +1012,9 @@ class IntervalProxyGUI:
         self.countdown_label.configure(text_color="#6B46FF")
 
     def _switch_now(self):
+        if self._switching:
+            self._append_log(t("switching_in_progress"))
+            return
         group = self.group_combo.get()
         placeholders = (t("loading"), t("please_connect"), t("no_proxy_group"))
         if group in placeholders:
@@ -913,9 +1022,24 @@ class IntervalProxyGUI:
             return
         self.config.set("check_before_switch", self.check_var.get())
 
+        self._switching = True
+        try:
+            self.switch_now_btn.configure(state="disabled")
+        except Exception:
+            pass
+
         def do_switch():
-            self.switcher.switch_proxy(group)
-            self.root.after(100, self._on_group_selected, None)
+            try:
+                self.switcher.switch_proxy(group)
+            finally:
+                def done():
+                    self._switching = False
+                    try:
+                        self.switch_now_btn.configure(state="normal")
+                    except Exception:
+                        pass
+                    self._on_group_selected(None)
+                self.root.after(100, done)
 
         threading.Thread(target=do_switch, daemon=True).start()
 
@@ -1007,6 +1131,47 @@ class IntervalProxyGUI:
         m, s = divmod(seconds, 60)
         text = f"{m:02d}:{s:02d}"
         self.root.after(0, lambda: self.countdown_label.configure(text=text))
+
+    def _set_interval_preset(self, seconds: int):
+        """点预设按钮:填入 entry,保存配置;若调度器正在跑,提示需停止后才生效。"""
+        try:
+            self.interval_entry.delete(0, "end")
+            self.interval_entry.insert(0, str(int(seconds)))
+        except Exception:
+            return
+        self.config.set("interval_seconds", int(seconds))
+        self.config.save()
+        if self.switcher.is_running():
+            self._append_log(t("interval_will_apply_next"))
+
+    def _set_controls_enabled(self, enabled: bool):
+        """根据后端在线状态启用/禁用主控按钮。运行中的"停止"始终可点。"""
+        try:
+            if enabled:
+                # start_btn 要不要可点取决于"是否在跑": 运行中保留"停止"功能
+                self.start_btn.configure(state="normal")
+                self.switch_now_btn.configure(state="normal" if not getattr(self, "_switching", False) else "disabled")
+                self.test_btn.configure(state="normal")
+            else:
+                # 离线:不允许开新任务和单次切换/测速;运行中的话保留 start_btn 让用户停掉
+                if self.switcher.is_running():
+                    self.start_btn.configure(state="normal")
+                else:
+                    self.start_btn.configure(state="disabled")
+                self.switch_now_btn.configure(state="disabled")
+                self.test_btn.configure(state="disabled")
+        except Exception:
+            pass
+
+    def _on_switched(self, group: str, proxy: str):
+        """switcher 切换成功后立刻调用,无需等 2s sync 即可看到新节点。"""
+        def apply():
+            try:
+                self.current_proxy_label.configure(text=proxy)
+                self._last_proxy = proxy
+            except Exception:
+                pass
+        self.root.after(0, apply)
 
     def _update_status(self, status: str):
         # 当前实现没有专门的"切换状态"标签;保留接口以兼容回调

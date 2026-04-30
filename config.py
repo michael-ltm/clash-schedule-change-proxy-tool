@@ -37,6 +37,7 @@ class Config:
         "ajiasu_install_path": "",        # AJiaSu 安装目录,内含 AJiaSu.exe / res.fvr
         "ajiasu_ipc_dir": "",             # 留空使用默认 C:\\Users\\Public\\AJiaSu
         "ajiasu_selected_group": "",      # 选择的"分组"(地区/分类),GROUP_ALL 等
+        "ajiasu_patch_ever_installed": False,  # 曾经成功打过补丁;用于检测被升级覆盖
     }
     
     def __init__(self, config_dir: Optional[str] = None):

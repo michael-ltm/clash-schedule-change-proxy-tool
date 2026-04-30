@@ -190,16 +190,28 @@ class ProxySwitcher:
         self.scheduler = ProxyScheduler()
         self._log_callback: Optional[Callable[[str], None]] = None
         self._status_callback: Optional[Callable[[str], None]] = None
+        self._on_switched: Optional[Callable[[str, str], None]] = None
         self._used_proxies: set = set()  # 记录已使用的代理
         self._all_proxies: set = set()   # 记录所有可用代理
-    
+
     def set_log_callback(self, callback: Callable[[str], None]):
         """设置日志回调"""
         self._log_callback = callback
-    
+
     def set_status_callback(self, callback: Callable[[str], None]):
         """设置状态回调"""
         self._status_callback = callback
+
+    def set_on_switched(self, callback: Callable[[str, str], None]):
+        """切换成功后立刻被调用,(group_name, proxy_name)。供 GUI 即时刷新当前节点。"""
+        self._on_switched = callback
+
+    def _fire_switched(self, group: str, proxy: str):
+        if self._on_switched:
+            try:
+                self._on_switched(group, proxy)
+            except Exception as e:
+                logger.error(f"on_switched 回调失败: {e}")
     
     def _log(self, message: str):
         """记录日志"""
@@ -303,25 +315,27 @@ class ProxySwitcher:
                     self._log(f"✓ 切换成功: {proxy_name} (延迟: {delay}ms)")
                     self._update_status(f"当前: {proxy_name}")
                     self._used_proxies.add(proxy_name)
+                    self._fire_switched(group_name, proxy_name)
                     return True
                 else:
                     self._log(f"✗ 切换失败: {proxy_name}")
-            
+
             self._log("错误: 所有候选代理切换失败")
             self._update_status("切换失败")
             return False
         else:
-            # 不检测延迟时，优先选择未使用的代理
+            # 不检测延迟时,优先选择未使用的代理
             unused_proxies = [p for p in available_proxies if p not in self._used_proxies]
             candidates = unused_proxies if unused_proxies else available_proxies
-            
+
             # 随机选择一个候选代理
             proxy_name = random.choice(candidates)
-            
+
             if self.clash_api.switch_proxy(group_name, proxy_name):
                 self._log(f"切换成功: {proxy_name}")
                 self._update_status(f"当前: {proxy_name}")
                 self._used_proxies.add(proxy_name)
+                self._fire_switched(group_name, proxy_name)
                 return True
             else:
                 self._log(f"切换失败: {proxy_name}")
@@ -363,6 +377,7 @@ class AJiaSuProxySwitcher:
         self.scheduler = ProxyScheduler()
         self._log_callback: Optional[Callable[[str], None]] = None
         self._status_callback: Optional[Callable[[str], None]] = None
+        self._on_switched: Optional[Callable[[str, str], None]] = None
         self._used_proxies: set = set()
         self._all_proxies: set = set()
 
@@ -371,6 +386,16 @@ class AJiaSuProxySwitcher:
 
     def set_status_callback(self, callback: Callable[[str], None]):
         self._status_callback = callback
+
+    def set_on_switched(self, callback: Callable[[str, str], None]):
+        self._on_switched = callback
+
+    def _fire_switched(self, group: str, proxy: str):
+        if self._on_switched:
+            try:
+                self._on_switched(group, proxy)
+            except Exception as e:
+                logger.error(f"on_switched 回调失败: {e}")
 
     def _log(self, message: str):
         logger.info(message)
@@ -460,6 +485,7 @@ class AJiaSuProxySwitcher:
                     self._log(f"✓ 切换成功: {name} (延迟: {delay}ms)")
                     self._update_status(f"当前: {name}")
                     self._used_proxies.add(name)
+                    self._fire_switched(group_name, name)
                     return True
                 else:
                     self._log(f"✗ 切换失败: {name}")
@@ -475,6 +501,7 @@ class AJiaSuProxySwitcher:
                 self._log(f"切换成功: {name}")
                 self._update_status(f"当前: {name}")
                 self._used_proxies.add(name)
+                self._fire_switched(group_name, name)
                 return True
             else:
                 self._log(f"切换失败: {name}")
