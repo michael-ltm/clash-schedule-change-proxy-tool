@@ -10,8 +10,38 @@ import sys
 TRANSLATIONS = {
     "zh_CN": {
         # 窗口
-        "app_title": "定时更改Clash代理",
-        
+        "app_title": "定时切换代理",
+
+        # 模式
+        "mode_label": "模式",
+        "mode_clash": "Clash",
+        "mode_ajiasu": "爱加速",
+        "mode_switched": "已切换到模式: {mode}",
+
+        # AJiaSu
+        "ajiasu_path": "安装目录",
+        "ajiasu_detect": "自动",
+        "ajiasu_patch": "安装桥接",
+        "ajiasu_unpatch": "卸载桥接",
+        "ajiasu_bridge_unknown": "桥接状态: 未知",
+        "ajiasu_bridge_patched": "● 桥接已安装",
+        "ajiasu_bridge_not_patched": "● 桥接未安装",
+        "ajiasu_bridge_online": "● 爱加速桥已在线",
+        "ajiasu_bridge_offline": "● 爱加速桥未响应",
+        "ajiasu_bridge_offline_tip": "未收到爱加速桥的响应,请确认: 1) 桥接已安装  2) AJiaSu.exe 已启动并打开主窗口",
+        "ajiasu_path_invalid": "安装目录无效(需包含 AJiaSu.exe 和 res.fvr)",
+        "ajiasu_detected": "已检测到安装目录: {path}",
+        "ajiasu_not_detected": "未自动检测到 AJiaSu 安装目录,请手动选择",
+        "ajiasu_running_warn": "请先关闭 AJiaSu.exe 再操作补丁",
+        "ajiasu_patch_done_tip": "补丁已就绪,请启动 AJiaSu.exe",
+        "ajiasu_starting": "正在初始化爱加速模式...",
+        "ajiasu_banner_unpatched": "⚠ 桥接未安装 — 点这里安装",
+        "ajiasu_banner_no_path": "⚠ 未配置爱加速安装目录 — 点 ⚙ 设置",
+        "ajiasu_need_admin_title": "需要管理员权限",
+        "ajiasu_need_admin_msg": "{path} 没有写入权限(通常是因为爱加速装在 Program Files)。\n\n是否以管理员身份重启本程序?重启后请再次点击\"安装桥接\"。",
+        "ajiasu_relaunch_failed": "提权重启失败,请右键以管理员身份重新启动本程序",
+        "ajiasu_no_write_perm": "没有写入权限",
+
         # 状态
         "status_detecting": "● 检测中...",
         "status_connected": "● 已连接",
@@ -64,8 +94,38 @@ TRANSLATIONS = {
     
     "en_US": {
         # Window
-        "app_title": "Clash Proxy Timer",
-        
+        "app_title": "Proxy Timer",
+
+        # Mode
+        "mode_label": "Mode",
+        "mode_clash": "Clash",
+        "mode_ajiasu": "AJiaSu",
+        "mode_switched": "Switched to mode: {mode}",
+
+        # AJiaSu
+        "ajiasu_path": "Install Dir",
+        "ajiasu_detect": "Auto",
+        "ajiasu_patch": "Install Bridge",
+        "ajiasu_unpatch": "Uninstall Bridge",
+        "ajiasu_bridge_unknown": "Bridge status: unknown",
+        "ajiasu_bridge_patched": "● Bridge installed",
+        "ajiasu_bridge_not_patched": "● Bridge not installed",
+        "ajiasu_bridge_online": "● AJiaSu bridge online",
+        "ajiasu_bridge_offline": "● AJiaSu bridge offline",
+        "ajiasu_bridge_offline_tip": "No response from the AJiaSu bridge. Make sure: 1) bridge is installed; 2) AJiaSu.exe is running with main window open.",
+        "ajiasu_path_invalid": "Invalid install dir (needs AJiaSu.exe and res.fvr)",
+        "ajiasu_detected": "Detected install dir: {path}",
+        "ajiasu_not_detected": "AJiaSu install dir not auto-detected. Please pick manually.",
+        "ajiasu_running_warn": "Close AJiaSu.exe before patching",
+        "ajiasu_patch_done_tip": "Patch ready. Start AJiaSu.exe to use it.",
+        "ajiasu_starting": "Starting AJiaSu mode...",
+        "ajiasu_banner_unpatched": "⚠ Bridge not installed — click here to install",
+        "ajiasu_banner_no_path": "⚠ AJiaSu install dir not set — click ⚙ to configure",
+        "ajiasu_need_admin_title": "Administrator permission required",
+        "ajiasu_need_admin_msg": "{path} is not writable (usually because AJiaSu is installed under Program Files).\n\nRelaunch this app as administrator? After relaunch, click \"Install Bridge\" again.",
+        "ajiasu_relaunch_failed": "Failed to relaunch as admin. Please right-click and run as administrator.",
+        "ajiasu_no_write_perm": "No write permission",
+
         # Status
         "status_detecting": "● Detecting...",
         "status_connected": "● Connected",

@@ -16,11 +16,9 @@ class Config:
     """配置管理类"""
     
     DEFAULT_CONFIG = {
-        "clash_host": "127.0.0.1",
-        "clash_port": 9097,  # Clash Verge 默认端口
-        "clash_secret": "",
+        # 全局
+        "mode": "clash",  # clash | ajiasu
         "interval_minutes": 30,
-        "selected_group": "",
         "auto_start": False,
         "check_before_switch": True,
         "max_retry": 3,
@@ -28,6 +26,17 @@ class Config:
         "window_width": 480,
         "window_height": 720,
         "language": "",  # 语言设置，空则自动检测
+
+        # Clash 模式
+        "clash_host": "127.0.0.1",
+        "clash_port": 9097,  # Clash Verge 默认端口
+        "clash_secret": "",
+        "selected_group": "",
+
+        # 爱加速 (AJiaSu) 模式
+        "ajiasu_install_path": "",        # AJiaSu 安装目录,内含 AJiaSu.exe / res.fvr
+        "ajiasu_ipc_dir": "",             # 留空使用默认 C:\\Users\\Public\\AJiaSu
+        "ajiasu_selected_group": "",      # 选择的"分组"(地区/分类),GROUP_ALL 等
     }
     
     def __init__(self, config_dir: Optional[str] = None):

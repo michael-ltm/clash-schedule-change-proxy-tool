@@ -168,6 +168,25 @@ python main.py
 - **Windows**: `%APPDATA%/clash-proxy-timer/config.json`
 - **macOS/Linux**: `~/.clash-proxy-timer/config.json`
 
+### 爱加速 (AJiaSu) 模式
+
+支持自动切换 [爱加速](https://www.aijiasu.com/) 客户端的节点。原理是把一段 JS 桥脚本注入到爱加速的 `res.fvr`(Sciter UI 资源包),由它在程序内部轮询命令文件,本工具通过文件 IPC 调用爱加速的 `vpnConnect` / `pingMultiServer` 等内部接口。
+
+**仅支持 Windows**(因为 `AJiaSu.exe` 只在 Windows 上运行)。
+
+使用步骤:
+
+1. 顶部"模式"切到 **爱加速**
+2. 点 ⚙ 展开设置面板
+3. 选择 AJiaSu 安装目录(也可点"自动"试着自动找),目录里要有 `AJiaSu.exe` 和 `res.fvr`
+4. **关闭 AJiaSu.exe**,然后点"安装桥接" — 工具会备份原始 `res.fvr` 到 `res.fvr.bak`,再注入 `ajiasu_bridge.js`
+5. 启动 AJiaSu.exe,等到主窗口出来,顶部状态会变成"● 爱加速桥已在线"
+6. 选分组(全部 / 收藏 / 最近,或按地区)、设置间隔,点开始
+
+如需还原,点"卸载桥接"即可(优先用备份恢复)。
+
+桥接通信文件位于 `C:\Users\Public\AJiaSu\` 下,由 AJiaSu 进程内 JS 创建。
+
 ### 构建
 
 ```bash
