@@ -59,7 +59,7 @@ TRANSLATIONS = {
         "proxy_group": "代理组",
         "current_node": "当前节点",
         "interval": "切换间隔",
-        "minutes": "分钟",
+        "minutes": "秒",
         "check_before_switch": "切换前检测可用性",
         
         # 按钮
@@ -143,7 +143,7 @@ TRANSLATIONS = {
         "proxy_group": "Proxy Group",
         "current_node": "Current Node",
         "interval": "Interval",
-        "minutes": "min",
+        "minutes": "sec",
         "check_before_switch": "Check availability before switch",
         
         # Buttons

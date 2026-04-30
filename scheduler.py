@@ -13,6 +13,31 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+def _resolve_interval_seconds(config) -> int:
+    """
+    从配置里解析切换间隔(秒)。优先 interval_seconds;
+    若只有旧的 interval_minutes 则换算并迁移。
+    """
+    sec = config.get("interval_seconds", None)
+    if sec is None:
+        # 老配置:interval_minutes
+        old = config.get("interval_minutes", None)
+        if old is not None:
+            sec = max(1, int(old) * 60)
+            try:
+                config.set("interval_seconds", sec)
+                config.save()
+            except Exception:
+                pass
+        else:
+            sec = 60
+    try:
+        sec = int(sec)
+    except Exception:
+        sec = 60
+    return max(1, sec)
+
+
 class ProxyScheduler:
     """代理切换调度器"""
     
@@ -20,23 +45,24 @@ class ProxyScheduler:
         """初始化调度器"""
         self._running = False
         self._thread: Optional[threading.Thread] = None
-        self._interval_minutes = 30
+        self._interval_seconds = 60
         self._callback: Optional[Callable] = None
         self._on_tick: Optional[Callable[[int], None]] = None  # 每秒回调，参数为剩余秒数
         self._lock = threading.Lock()
         self._next_run_time: Optional[datetime] = None
         self._remaining_seconds = 0
-    
-    def set_interval(self, minutes: int):
+
+    def set_interval_seconds(self, seconds: int):
         """
-        设置切换间隔
-        
-        Args:
-            minutes: 间隔分钟数
+        设置切换间隔(秒)。最小 1 秒。
         """
         with self._lock:
-            self._interval_minutes = max(1, minutes)
-            logger.info(f"设置切换间隔: {self._interval_minutes} 分钟")
+            self._interval_seconds = max(1, int(seconds))
+            logger.info(f"设置切换间隔: {self._interval_seconds} 秒")
+
+    # 兼容旧接口
+    def set_interval(self, minutes: int):
+        self.set_interval_seconds(int(minutes) * 60)
     
     def set_callback(self, callback: Callable):
         """
@@ -117,8 +143,8 @@ class ProxyScheduler:
         """调度循环"""
         while self._running:
             with self._lock:
-                interval_seconds = self._interval_minutes * 60
-            
+                interval_seconds = self._interval_seconds
+
             self._remaining_seconds = interval_seconds
             self._next_run_time = datetime.now()
             
@@ -304,12 +330,12 @@ class ProxySwitcher:
     
     def start_auto_switch(self):
         """启动自动切换"""
-        interval = self.config.get("interval_minutes", 30)
-        self.scheduler.set_interval(interval)
+        interval = _resolve_interval_seconds(self.config)
+        self.scheduler.set_interval_seconds(interval)
         self.scheduler.set_callback(self.switch_proxy)
         self.scheduler.start()
-        self._log(f"自动切换已启动，间隔: {interval} 分钟")
-    
+        self._log(f"自动切换已启动,间隔: {interval} 秒")
+
     def stop_auto_switch(self):
         """停止自动切换"""
         self.scheduler.stop()
@@ -456,11 +482,11 @@ class AJiaSuProxySwitcher:
                 return False
 
     def start_auto_switch(self):
-        interval = self.config.get("interval_minutes", 30)
-        self.scheduler.set_interval(interval)
+        interval = _resolve_interval_seconds(self.config)
+        self.scheduler.set_interval_seconds(interval)
         self.scheduler.set_callback(self.switch_proxy)
         self.scheduler.start()
-        self._log(f"爱加速自动切换已启动,间隔: {interval} 分钟")
+        self._log(f"爱加速自动切换已启动,间隔: {interval} 秒")
 
     def stop_auto_switch(self):
         self.scheduler.stop()

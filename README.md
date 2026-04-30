@@ -61,7 +61,7 @@ python main.py
 
 1. **Start the app** - It will auto-detect your Clash settings
 2. **Select proxy group** - Choose the group you want to auto-switch
-3. **Set interval** - Configure how often to switch (in minutes)
+3. **Set interval** - Configure how often to switch (in seconds)
 4. **Start** - Click "Start Auto Switch" button
 
 The app will:
@@ -148,7 +148,7 @@ python main.py
 
 1. **启动应用** - 程序会自动检测 Clash 设置
 2. **选择代理组** - 选择要自动切换的代理组
-3. **设置间隔** - 配置切换间隔（分钟）
+3. **设置间隔** - 配置切换间隔（秒）
 4. **开始** - 点击"开始自动切换"按钮
 
 程序将会：

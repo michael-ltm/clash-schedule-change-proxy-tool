@@ -284,7 +284,7 @@ class IntervalProxyGUI:
             corner_radius=8, border_width=2, border_color="#3D3D4D",
         )
         self.interval_entry.pack(side="left")
-        self.interval_entry.insert(0, str(self.config.get("interval_minutes", 30)))
+        self.interval_entry.insert(0, str(self.config.get("interval_seconds", 60)))
         ctk.CTkLabel(
             interval_input, text=t("minutes"),
             font=ctk.CTkFont(size=13), text_color="#8B8B9B",
@@ -887,12 +887,14 @@ class IntervalProxyGUI:
             return
 
         try:
-            interval = int(self.interval_entry.get() or 30)
+            interval = int(self.interval_entry.get() or 60)
         except ValueError:
             self._append_log(t("interval_must_be_number"))
             return
+        if interval < 1:
+            interval = 1
 
-        self.config.set("interval_minutes", interval)
+        self.config.set("interval_seconds", interval)
         self.config.set("check_before_switch", self.check_var.get())
         # 持久化当前选中的 group
         saved_key = "selected_group" if self.mode == MODE_CLASH else "ajiasu_selected_group"

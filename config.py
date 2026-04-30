@@ -18,7 +18,7 @@ class Config:
     DEFAULT_CONFIG = {
         # 全局
         "mode": "clash",  # clash | ajiasu
-        "interval_minutes": 30,
+        "interval_seconds": 60,  # 切换间隔(秒);老版本的 interval_minutes 启动时会自动迁移
         "auto_start": False,
         "check_before_switch": True,
         "max_retry": 3,
@@ -77,10 +77,20 @@ class Config:
         try:
             with open(self.config_file, "r", encoding="utf-8") as f:
                 loaded_config = json.load(f)
-                # 合并配置，保留默认值
+                # 合并配置,保留默认值
                 for key, value in loaded_config.items():
                     if key in self.DEFAULT_CONFIG:
                         self.config[key] = value
+                # 迁移:旧版本用的是 interval_minutes,新版改成 interval_seconds
+                if "interval_seconds" not in loaded_config and "interval_minutes" in loaded_config:
+                    try:
+                        self.config["interval_seconds"] = max(1, int(loaded_config["interval_minutes"]) * 60)
+                        logger.info(
+                            f"已将 interval_minutes={loaded_config['interval_minutes']} 迁移为 "
+                            f"interval_seconds={self.config['interval_seconds']}"
+                        )
+                    except Exception:
+                        pass
             logger.info(f"配置加载成功: {self.config_file}")
             return True
         except Exception as e:
