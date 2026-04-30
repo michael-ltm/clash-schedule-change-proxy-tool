@@ -762,17 +762,37 @@ class IntervalProxyGUI:
             self._update_ajiasu_banner()
 
     def _auto_detect_ajiasu_clicked(self):
-        d = ajiasu_detector.detect_install_dir()
-        if d:
-            self.ajiasu_path_entry.delete(0, "end")
-            self.ajiasu_path_entry.insert(0, str(d))
-            self.config.set("ajiasu_install_path", str(d))
-            self.config.save()
-            self._append_log(t("ajiasu_detected", path=str(d)))
-            self._refresh_ajiasu_bridge_status()
-            self._update_ajiasu_banner()
-        else:
-            self._append_log(t("ajiasu_not_detected"))
+        # WMIC 可能慢,挪到线程
+        self._append_log(t("ajiasu_detecting"))
+
+        def worker():
+            running = ajiasu_detector.find_running_install_dir()
+            d = running or ajiasu_detector.detect_install_dir()
+
+            def apply():
+                if d:
+                    self.ajiasu_path_entry.delete(0, "end")
+                    self.ajiasu_path_entry.insert(0, str(d))
+                    self.config.set("ajiasu_install_path", str(d))
+                    self.config.save()
+                    if running:
+                        # 清楚告诉用户:用的是当前在跑的进程目录,
+                        # 这能避开"打补丁打到启动器目录"的坑
+                        self._append_log(t("ajiasu_detected_running", path=str(d)))
+                    else:
+                        self._append_log(t("ajiasu_detected", path=str(d)))
+                    # 顺便提示 HD_AJiaSu.exe 这种情况
+                    names = ajiasu_detector.running_exe_names()
+                    if names:
+                        self._append_log(t("ajiasu_running_exe", names=", ".join(names)))
+                    self._refresh_ajiasu_bridge_status()
+                    self._update_ajiasu_banner()
+                else:
+                    self._append_log(t("ajiasu_not_detected"))
+
+            self.root.after(0, apply)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _ajiasu_install_dir(self) -> Optional[Path]:
         p = self.ajiasu_path_entry.get().strip() if hasattr(self, "ajiasu_path_entry") \
@@ -949,11 +969,16 @@ class IntervalProxyGUI:
         threading.Thread(target=do_dump, daemon=True).start()
 
     def _launch_ajiasu(self, install_dir: Path):
-        """拉起 AJiaSu.exe;失败的话只在日志里报。"""
+        """拉起爱加速。优先 HD_AJiaSu.exe,退而 AJiaSu.exe。"""
         import subprocess
-        exe = install_dir / "AJiaSu.exe"
-        if not exe.exists():
-            self._append_log(f"未找到 {exe}")
+        exe = None
+        for name in ajiasu_detector.EXE_NAMES:
+            p = install_dir / name
+            if p.exists():
+                exe = p
+                break
+        if exe is None:
+            self._append_log(f"未在 {install_dir} 找到任一爱加速 exe")
             return
         try:
             if sys.platform == "win32":
@@ -963,9 +988,9 @@ class IntervalProxyGUI:
                 )
             else:
                 subprocess.Popen([str(exe)], cwd=str(install_dir))
-            self._append_log(t("ajiasu_launching"))
+            self._append_log(t("ajiasu_launching") + f" ({exe.name})")
         except Exception as e:
-            self._append_log(f"启动 AJiaSu.exe 失败: {e}")
+            self._append_log(f"启动 {exe.name} 失败: {e}")
 
     def _prompt_relaunch_as_admin(self, target_path: Path):
         """弹窗提示用户以管理员身份重启,确认则提权重启并退出当前进程。"""
