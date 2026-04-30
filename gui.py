@@ -774,17 +774,30 @@ class IntervalProxyGUI:
             )
 
     def _patch_ajiasu(self):
+        # 立即给用户一个"点击已收到"的反馈,免得点了没动静
+        self._append_log("──── " + t("ajiasu_patch_start") + " ────")
+
         d = self._ajiasu_install_dir()
         if d is None:
             self._append_log(t("ajiasu_path_invalid"))
+            try:
+                messagebox.showwarning(t("ajiasu_patch"), t("ajiasu_path_invalid"))
+            except Exception:
+                pass
             return
         if ajiasu_detector.is_running():
             self._append_log(t("ajiasu_running_warn"))
+            try:
+                messagebox.showwarning(t("ajiasu_patch"), t("ajiasu_running_warn"))
+            except Exception:
+                pass
             return
         # 先做权限预检,装在 Program Files 时这里会拦下
         if not ajiasu_patcher.can_write(d) and not win_admin.is_admin():
             self._prompt_relaunch_as_admin(d / "res.fvr")
             return
+
+        self._append_log(t("ajiasu_patching"))
         ok, msg = ajiasu_patcher.patch(d)
         self._append_log(("✓ " if ok else "✗ ") + msg)
         # 写失败也可能是权限问题(并发场景);兜底再问一次
@@ -808,6 +821,12 @@ class IntervalProxyGUI:
                 yes = False
             if yes:
                 self._launch_ajiasu(d)
+        else:
+            # 失败也弹一下,让用户知道结果
+            try:
+                messagebox.showerror(t("ajiasu_patch"), msg)
+            except Exception:
+                pass
 
     def _dump_ajiasu_raw(self):
         """把桥拿到的原始 JSON (server 列表 + 状态) 写到 %TEMP% 下,便于排查字段名映射。"""
@@ -879,12 +898,21 @@ class IntervalProxyGUI:
             self._append_log(t("ajiasu_relaunch_failed"))
 
     def _unpatch_ajiasu(self):
+        self._append_log("──── " + t("ajiasu_unpatch_start") + " ────")
         d = self._ajiasu_install_dir()
         if d is None:
             self._append_log(t("ajiasu_path_invalid"))
+            try:
+                messagebox.showwarning(t("ajiasu_unpatch"), t("ajiasu_path_invalid"))
+            except Exception:
+                pass
             return
         if ajiasu_detector.is_running():
             self._append_log(t("ajiasu_running_warn"))
+            try:
+                messagebox.showwarning(t("ajiasu_unpatch"), t("ajiasu_running_warn"))
+            except Exception:
+                pass
             return
         if not ajiasu_patcher.can_write(d) and not win_admin.is_admin():
             self._prompt_relaunch_as_admin(d / "res.fvr")
@@ -893,6 +921,11 @@ class IntervalProxyGUI:
         self._append_log(("✓ " if ok else "✗ ") + msg)
         self._refresh_ajiasu_bridge_status()
         self._update_ajiasu_banner()
+        if not ok:
+            try:
+                messagebox.showerror(t("ajiasu_unpatch"), msg)
+            except Exception:
+                pass
 
     def _update_ajiasu_banner(self):
         """根据 mode + 路径 + 补丁状态,显示/隐藏 + 设置横幅文案。"""

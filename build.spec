@@ -24,6 +24,7 @@ a = Analysis(
         'tkinter',
         'tkinter.ttk',
         'tkinter.filedialog',
+        'tkinter.messagebox',
         'customtkinter',
         'yaml',
     ],
@@ -70,6 +71,6 @@ if is_mac:
         bundle_identifier='com.clash-proxy-timer.app',
         info_plist={
             'NSHighResolutionCapable': 'True',
-            'CFBundleShortVersionString': '1.1.3',
+            'CFBundleShortVersionString': '1.1.4',
         },
     )

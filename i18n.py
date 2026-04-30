@@ -48,6 +48,9 @@ TRANSLATIONS = {
         "ajiasu_debug_hint": "调试",
         "ajiasu_dump_raw": "导出原始数据",
         "ajiasu_dump_done": "已导出原始数据到: {path}",
+        "ajiasu_patch_start": "开始安装桥接",
+        "ajiasu_patching": "正在写入 res.fvr...",
+        "ajiasu_unpatch_start": "开始卸载桥接",
 
         # 状态
         "status_detecting": "● 检测中...",
@@ -141,6 +144,9 @@ TRANSLATIONS = {
         "ajiasu_debug_hint": "Debug",
         "ajiasu_dump_raw": "Dump raw",
         "ajiasu_dump_done": "Raw data dumped to: {path}",
+        "ajiasu_patch_start": "Installing bridge",
+        "ajiasu_patching": "Writing res.fvr...",
+        "ajiasu_unpatch_start": "Uninstalling bridge",
 
         # Status
         "status_detecting": "● Detecting...",
