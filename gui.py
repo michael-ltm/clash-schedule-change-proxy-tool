@@ -502,19 +502,21 @@ class IntervalProxyGUI:
         )
         self.ajiasu_bridge_status.pack(side="left")
 
-        ctk.CTkButton(
+        self._unpatch_btn = ctk.CTkButton(
             row2, text=t("ajiasu_unpatch"), width=80, height=32, corner_radius=8,
             fg_color="#2D2D3D", hover_color="#3D3D4D",
             font=ctk.CTkFont(size=11, weight="bold"),
             border_width=2, border_color="#4D4D5D",
             command=self._unpatch_ajiasu,
-        ).pack(side="right", padx=(6, 0))
-        ctk.CTkButton(
+        )
+        self._unpatch_btn.pack(side="right", padx=(6, 0))
+        self._patch_btn = ctk.CTkButton(
             row2, text=t("ajiasu_patch"), width=110, height=32, corner_radius=8,
             fg_color="#6B46FF", hover_color="#7B56FF",
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._patch_ajiasu,
-        ).pack(side="right")
+        )
+        self._patch_btn.pack(side="right")
 
         # 调试行
         row3 = ctk.CTkFrame(self.ajiasu_settings, fg_color="transparent")
@@ -815,33 +817,57 @@ class IntervalProxyGUI:
             except Exception:
                 pass
             return
-        if ajiasu_detector.is_running():
-            self._append_log(t("ajiasu_running_warn"))
-            try:
-                messagebox.showwarning(t("ajiasu_patch"), t("ajiasu_running_warn"))
-            except Exception:
-                pass
-            return
-        # 先做权限预检,装在 Program Files 时这里会拦下
-        if not ajiasu_patcher.can_write(d) and not win_admin.is_admin():
-            self._prompt_relaunch_as_admin(d / "res.fvr")
-            return
 
-        self._append_log(t("ajiasu_patching"))
-        ok, msg = ajiasu_patcher.patch(d)
+        # 后续有 tasklist (~5s) 和 zip 重写 (~1-2s),全部挪到后台线程,
+        # 主线程不被卡 = 不会"未响应"
+        self._set_patch_buttons_busy(True)
+
+        def worker():
+            try:
+                if ajiasu_detector.is_running():
+                    self.root.after(0, self._patch_done_running)
+                    return
+                # 权限预检
+                if not ajiasu_patcher.can_write(d) and not win_admin.is_admin():
+                    self.root.after(0, lambda: self._prompt_relaunch_as_admin(d / "res.fvr"))
+                    return
+
+                self.root.after(0, lambda: self._append_log(t("ajiasu_patching")))
+                ok, msg = ajiasu_patcher.patch(d)
+                self.root.after(0, lambda: self._patch_done(d, ok, msg))
+            except Exception as e:
+                self.root.after(0, lambda err=e: self._patch_failed_exc(err))
+            finally:
+                self.root.after(0, lambda: self._set_patch_buttons_busy(False))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _patch_done_running(self):
+        self._append_log(t("ajiasu_running_warn"))
+        try:
+            messagebox.showwarning(t("ajiasu_patch"), t("ajiasu_running_warn"))
+        except Exception:
+            pass
+
+    def _patch_failed_exc(self, e):
+        self._append_log(f"✗ {e}")
+        try:
+            messagebox.showerror(t("ajiasu_patch"), str(e))
+        except Exception:
+            pass
+
+    def _patch_done(self, d, ok, msg):
         self._append_log(("✓ " if ok else "✗ ") + msg)
-        # 写失败也可能是权限问题(并发场景);兜底再问一次
+        # 失败可能是权限问题(并发场景);兜底再问一次提权
         if not ok and not win_admin.is_admin() and not ajiasu_patcher.can_write(d):
             self._prompt_relaunch_as_admin(d / "res.fvr")
             return
         self._refresh_ajiasu_bridge_status()
         self._update_ajiasu_banner()
         if ok:
-            # 记录"曾经成功打过补丁",用于检测后续被覆盖
             self.config.set("ajiasu_patch_ever_installed", True)
             self.config.save()
             self._append_log(t("ajiasu_patch_done_tip"))
-            # 询问是否立即启动 AJiaSu.exe
             try:
                 yes = messagebox.askyesno(
                     title=t("ajiasu_patch_done_title"),
@@ -852,9 +878,19 @@ class IntervalProxyGUI:
             if yes:
                 self._launch_ajiasu(d)
         else:
-            # 失败也弹一下,让用户知道结果
             try:
                 messagebox.showerror(t("ajiasu_patch"), msg)
+            except Exception:
+                pass
+
+    def _set_patch_buttons_busy(self, busy: bool):
+        """打补丁/卸载补丁按钮的忙碌态切换。"""
+        for attr in ("_patch_btn", "_unpatch_btn"):
+            btn = getattr(self, attr, None)
+            if btn is None:
+                continue
+            try:
+                btn.configure(state="disabled" if busy else "normal")
             except Exception:
                 pass
 
@@ -964,25 +1000,42 @@ class IntervalProxyGUI:
             except Exception:
                 pass
             return
-        if ajiasu_detector.is_running():
-            self._append_log(t("ajiasu_running_warn"))
+
+        self._set_patch_buttons_busy(True)
+
+        def worker():
             try:
-                messagebox.showwarning(t("ajiasu_unpatch"), t("ajiasu_running_warn"))
-            except Exception:
-                pass
-            return
-        if not ajiasu_patcher.can_write(d) and not win_admin.is_admin():
-            self._prompt_relaunch_as_admin(d / "res.fvr")
-            return
-        ok, msg = ajiasu_patcher.unpatch(d)
-        self._append_log(("✓ " if ok else "✗ ") + msg)
-        self._refresh_ajiasu_bridge_status()
-        self._update_ajiasu_banner()
-        if not ok:
-            try:
-                messagebox.showerror(t("ajiasu_unpatch"), msg)
-            except Exception:
-                pass
+                if ajiasu_detector.is_running():
+                    def warn():
+                        self._append_log(t("ajiasu_running_warn"))
+                        try:
+                            messagebox.showwarning(t("ajiasu_unpatch"), t("ajiasu_running_warn"))
+                        except Exception:
+                            pass
+                    self.root.after(0, warn)
+                    return
+                if not ajiasu_patcher.can_write(d) and not win_admin.is_admin():
+                    self.root.after(0, lambda: self._prompt_relaunch_as_admin(d / "res.fvr"))
+                    return
+
+                ok, msg = ajiasu_patcher.unpatch(d)
+
+                def apply():
+                    self._append_log(("✓ " if ok else "✗ ") + msg)
+                    self._refresh_ajiasu_bridge_status()
+                    self._update_ajiasu_banner()
+                    if not ok:
+                        try:
+                            messagebox.showerror(t("ajiasu_unpatch"), msg)
+                        except Exception:
+                            pass
+                self.root.after(0, apply)
+            except Exception as e:
+                self.root.after(0, lambda err=e: self._append_log(f"✗ {err}"))
+            finally:
+                self.root.after(0, lambda: self._set_patch_buttons_busy(False))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _update_ajiasu_banner(self):
         """根据 mode + 路径 + 补丁状态,显示/隐藏 + 设置横幅文案。"""
@@ -1034,40 +1087,66 @@ class IntervalProxyGUI:
     # ====================== 主面板交互 ======================
 
     def _refresh_groups(self):
-        try:
-            groups = self.backend.get_proxy_groups()
-        except Exception as e:
-            self._append_log(f"刷新分组失败: {e}")
-            return
-        names = [g["name"] for g in groups] if groups else []
-        if not names:
+        # AJiaSu 模式下桥离线就别去 8s IPC 超时,直接显示"请连接"
+        if self.mode == MODE_AJIASU and not self.ajiasu_api.is_alive():
             self.group_combo.configure(values=[])
-            self.group_combo.set(t("no_proxy_group"))
+            self.group_combo.set(t("please_connect"))
             return
 
-        self.group_combo.configure(values=names)
-        saved_key = "selected_group" if self.mode == MODE_CLASH else "ajiasu_selected_group"
-        saved = self.config.get(saved_key)
-        if saved and saved in names:
-            self.group_combo.set(saved)
-        else:
-            self.group_combo.set(names[0])
-        self._on_group_selected(None)
+        def worker():
+            try:
+                groups = self.backend.get_proxy_groups()
+            except Exception as e:
+                self.root.after(0, lambda: self._append_log(f"刷新分组失败: {e}"))
+                return
+            names = [g["name"] for g in groups] if groups else []
+
+            def apply():
+                if not names:
+                    self.group_combo.configure(values=[])
+                    self.group_combo.set(t("no_proxy_group"))
+                    return
+                self.group_combo.configure(values=names)
+                saved_key = "selected_group" if self.mode == MODE_CLASH else "ajiasu_selected_group"
+                saved = self.config.get(saved_key)
+                if saved and saved in names:
+                    self.group_combo.set(saved)
+                else:
+                    self.group_combo.set(names[0])
+                self._on_group_selected(None)
+
+            self.root.after(0, apply)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _on_group_selected(self, _):
         group = self.group_combo.get()
         placeholders = (t("loading"), t("please_connect"), t("no_proxy_group"))
         if not group or group in placeholders:
             return
-        try:
-            current = self.backend.get_current_proxy(group)
-        except Exception:
-            current = None
-        self.current_proxy_label.configure(text=current or "-")
-        self._last_proxy = current
+        # 选中分组的持久化是同步的 (本地 io,极快)
         saved_key = "selected_group" if self.mode == MODE_CLASH else "ajiasu_selected_group"
         self.config.set(saved_key, group)
         self.config.save()
+
+        # AJiaSu 桥离线就不去 IPC 拿 current
+        if self.mode == MODE_AJIASU and not self.ajiasu_api.is_alive():
+            self.current_proxy_label.configure(text="-")
+            self._last_proxy = None
+            return
+
+        # 拿 current 走线程,避免主线程被 IPC 8s 超时卡住
+        def worker():
+            try:
+                current = self.backend.get_current_proxy(group)
+            except Exception:
+                current = None
+            def apply():
+                self.current_proxy_label.configure(text=current or "-")
+                self._last_proxy = current
+            self.root.after(0, apply)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _toggle_auto_switch(self):
         if self.switcher.is_running():
