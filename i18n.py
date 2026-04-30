@@ -51,6 +51,10 @@ TRANSLATIONS = {
         "ajiasu_patch_start": "开始安装桥接",
         "ajiasu_patching": "正在写入 res.fvr...",
         "ajiasu_unpatch_start": "开始卸载桥接",
+        "ajiasu_view_log": "查看桥日志",
+        "ajiasu_log_missing": "未找到桥日志: {path}\n(说明桥脚本在 AJiaSu 进程里还没跑起来 — 检查: 1) 是否点过\"安装桥接\"; 2) AJiaSu 是否启动并打开主窗口)",
+        "ajiasu_group_label": "节点分组",
+        "ajiasu_current_label": "当前节点",
 
         # 状态
         "status_detecting": "● 检测中...",
@@ -147,6 +151,10 @@ TRANSLATIONS = {
         "ajiasu_patch_start": "Installing bridge",
         "ajiasu_patching": "Writing res.fvr...",
         "ajiasu_unpatch_start": "Uninstalling bridge",
+        "ajiasu_view_log": "View bridge log",
+        "ajiasu_log_missing": "Bridge log not found: {path}\n(Means the bridge script never ran inside AJiaSu — check: 1) did you click \"Install Bridge\"? 2) is AJiaSu launched with main window open?)",
+        "ajiasu_group_label": "Node Group",
+        "ajiasu_current_label": "Current Node",
 
         # Status
         "status_detecting": "● Detecting...",

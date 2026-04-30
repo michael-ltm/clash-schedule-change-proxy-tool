@@ -17,6 +17,7 @@ from typing import Optional, Tuple
 logger = logging.getLogger(__name__)
 
 BRIDGE_FILENAME = "ajiasu_bridge.js"
+BRIDGE_VERSION = 2  # 与 ajiasu_bridge.js 顶部 BRIDGE_VERSION 对齐;升级 bridge 时同步加
 PATCH_MARKER = "<!-- AJIASU-BRIDGE-INSTALLED -->"
 PATCH_SCRIPT = (
     f'        {PATCH_MARKER}\n'

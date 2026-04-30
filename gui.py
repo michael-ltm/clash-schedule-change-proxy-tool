@@ -233,11 +233,12 @@ class IntervalProxyGUI:
         # 记下 group_row 给横幅做 pack 锚点
         self._main_inner_first_row = group_row
         group_row.pack(fill="x", pady=6)
-        ctk.CTkLabel(
+        self.group_label = ctk.CTkLabel(
             group_row, text=t("proxy_group"),
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color="#CCCCDD",
-        ).pack(side="left")
+        )
+        self.group_label.pack(side="left")
 
         self.refresh_btn = ctk.CTkButton(
             group_row, text="↻", width=32, height=32, corner_radius=16,
@@ -259,11 +260,12 @@ class IntervalProxyGUI:
 
         current_row = ctk.CTkFrame(main_inner, fg_color="transparent")
         current_row.pack(fill="x", pady=6)
-        ctk.CTkLabel(
+        self.current_label = ctk.CTkLabel(
             current_row, text=t("current_node"),
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color="#CCCCDD",
-        ).pack(side="left")
+        )
+        self.current_label.pack(side="left")
         self.current_proxy_label = ctk.CTkLabel(
             current_row, text="-",
             font=ctk.CTkFont(size=13, weight="bold"),
@@ -399,6 +401,9 @@ class IntervalProxyGUI:
         )
         self.log_text.pack(fill="both", expand=True, padx=12, pady=(6, 12))
 
+        # 所有 widget 都建好后再按 mode 设置一次主面板标签
+        self._apply_mode_labels()
+
     def _build_clash_settings(self):
         """Clash 设置面板"""
         self.clash_settings = ctk.CTkFrame(self.settings_frame, fg_color="transparent")
@@ -526,7 +531,15 @@ class IntervalProxyGUI:
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color="#8B8B9B",
             command=self._dump_ajiasu_raw,
-        ).pack(side="right")
+        ).pack(side="right", padx=(4, 0))
+        ctk.CTkButton(
+            row3, text=t("ajiasu_view_log"), height=28, corner_radius=6,
+            fg_color="transparent", hover_color="#2D2D3D",
+            border_width=1, border_color="#3D3D4D",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#8B8B9B",
+            command=self._view_bridge_log,
+        ).pack(side="right", padx=(4, 0))
 
         ctk.CTkLabel(self.ajiasu_settings, text="", height=4).pack()
 
@@ -541,6 +554,22 @@ class IntervalProxyGUI:
             self.clash_settings.pack(fill="x", pady=(8, 8))
         else:
             self.ajiasu_settings.pack(fill="x", pady=(8, 8))
+        self._apply_mode_labels()
+
+    def _apply_mode_labels(self):
+        """主面板标签按 mode 切换: AJiaSu 模式用更贴切的"节点分组"。"""
+        if not hasattr(self, "group_label"):
+            return
+        if self.mode == MODE_AJIASU:
+            try: self.group_label.configure(text=t("ajiasu_group_label"))
+            except Exception: pass
+            try: self.current_label.configure(text=t("ajiasu_current_label"))
+            except Exception: pass
+        else:
+            try: self.group_label.configure(text=t("proxy_group"))
+            except Exception: pass
+            try: self.current_label.configure(text=t("current_node"))
+            except Exception: pass
 
     # ====================== 模式切换 ======================
 
@@ -561,6 +590,7 @@ class IntervalProxyGUI:
         self.backend = self.clash_api if new_mode == MODE_CLASH else self.ajiasu_api
         self.switcher = self.clash_switcher if new_mode == MODE_CLASH else self.ajiasu_switcher
         self._show_settings_for_mode()
+        self._apply_mode_labels()
 
         self.group_combo.set(t("loading"))
         self.current_proxy_label.configure(text="-")
@@ -827,6 +857,33 @@ class IntervalProxyGUI:
                 messagebox.showerror(t("ajiasu_patch"), msg)
             except Exception:
                 pass
+
+    def _view_bridge_log(self):
+        """打开桥日志文件 (C:\\Users\\Public\\AJiaSu\\bridge.log) 给用户看。"""
+        log_path = Path("C:/Users/Public/AJiaSu/bridge.log")
+        ipc_dir = log_path.parent
+        if not log_path.exists():
+            self._append_log(t("ajiasu_log_missing", path=str(log_path)))
+            try:
+                messagebox.showinfo(t("ajiasu_view_log"),
+                                    t("ajiasu_log_missing", path=str(log_path)))
+            except Exception:
+                pass
+            return
+        try:
+            content = log_path.read_text(encoding="utf-8", errors="replace")
+            # 把最近 ~50 行倒进 GUI 日志
+            tail = "\n".join(content.splitlines()[-50:])
+            self._append_log("──── bridge.log (tail) ────\n" + tail)
+            # 同时用系统默认应用打开整个文件,方便用户复制
+            if sys.platform == "win32":
+                import os
+                os.startfile(str(log_path))
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["open", str(log_path)])
+        except Exception as e:
+            self._append_log(f"读取桥日志失败: {e}")
 
     def _dump_ajiasu_raw(self):
         """把桥拿到的原始 JSON (server 列表 + 状态) 写到 %TEMP% 下,便于排查字段名映射。"""

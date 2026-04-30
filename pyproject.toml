@@ -1,6 +1,6 @@
 [project]
 name = "clash-proxy-timer"
-version = "1.1.5"
+version = "1.2.0"
 description = "A cross-platform GUI tool for automatically switching Clash proxies at scheduled intervals"
 authors = [{name = "fengyiyang"}]
 license = {text = "MIT"}
