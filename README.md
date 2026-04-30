@@ -187,6 +187,8 @@ python main.py
 
 桥接通信文件位于 `C:\Users\Public\AJiaSu\` 下,由 AJiaSu 进程内 JS 创建。
 
+详细的架构、协议、xcall 依赖、故障排查 SOP 见 [docs/AJIASU_MODE.md](docs/AJIASU_MODE.md)。
+
 ### 构建
 
 ```bash
