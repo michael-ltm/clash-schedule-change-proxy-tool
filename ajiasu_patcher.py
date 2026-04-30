@@ -29,12 +29,26 @@ BAK_FILE = "res.fvr.bak"
 
 
 def _bridge_js_path() -> Path:
-    """开发态和打包后都能找到 bridge JS。"""
+    """
+    开发态和打包后都能找到 bridge JS。
+    PyInstaller one-file 模式下数据文件被解压到 sys._MEIPASS。
+    """
+    candidates = []
     if getattr(sys, "frozen", False):
-        base = Path(sys.executable).parent
-    else:
-        base = Path(__file__).parent
-    return base / BRIDGE_FILENAME
+        # PyInstaller 解压目录(one-file)
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / BRIDGE_FILENAME)
+        # exe 旁边(one-folder 模式 / 用户手动放置)
+        candidates.append(Path(sys.executable).parent / BRIDGE_FILENAME)
+    # 开发态:跟 .py 同目录
+    candidates.append(Path(__file__).parent / BRIDGE_FILENAME)
+
+    for c in candidates:
+        if c.exists():
+            return c
+    # 都找不到的话返回最后一个候选,留给上层报错
+    return candidates[-1]
 
 
 def find_res_file(install_dir: Path) -> Optional[Path]:

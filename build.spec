@@ -71,6 +71,6 @@ if is_mac:
         bundle_identifier='com.clash-proxy-timer.app',
         info_plist={
             'NSHighResolutionCapable': 'True',
-            'CFBundleShortVersionString': '1.1.4',
+            'CFBundleShortVersionString': '1.1.5',
         },
     )
