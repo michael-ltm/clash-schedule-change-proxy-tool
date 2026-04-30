@@ -74,9 +74,16 @@ def is_running() -> bool:
         return False
     try:
         import subprocess
+        # PyInstaller 打的 GUI 程序里 spawn tasklist 会闪黑色 console 窗口,
+        # 用 CREATE_NO_WINDOW + STARTUPINFO(SW_HIDE) 双保险压住。
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
         out = subprocess.run(
             ["tasklist", "/FI", f"IMAGENAME eq {EXE_NAME}"],
             capture_output=True, text=True, timeout=5,
+            creationflags=creationflags, startupinfo=startupinfo,
         )
         return EXE_NAME.lower() in out.stdout.lower()
     except Exception:
