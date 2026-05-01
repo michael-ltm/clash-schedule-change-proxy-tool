@@ -28,6 +28,7 @@ from clash_detector import auto_detect_and_connect
 import ajiasu_api
 import ajiasu_detector
 import ajiasu_patcher
+import ajiasu_injector
 import win_admin
 from ajiasu_api import AJiaSuAPI
 from i18n import t, init_language, set_language, get_language, SUPPORTED_LANGUAGES
@@ -543,6 +544,26 @@ class IntervalProxyGUI:
             command=self._view_bridge_log,
         ).pack(side="right", padx=(4, 0))
 
+        # 运行时注入(方案 B):不动 res.fvr,直接把桥脚本注进运行中的爱加速进程。
+        # 适用场景:磁盘补丁打了但 Sciter 没加载(常见原因见 docs/AJIASU_MODE.md)。
+        # 必须在爱加速运行时点击。
+        row4 = ctk.CTkFrame(self.ajiasu_settings, fg_color="transparent")
+        row4.pack(fill="x", pady=4, padx=18)
+        ctk.CTkLabel(
+            row4, text=t("ajiasu_inject_hint"),
+            font=ctk.CTkFont(size=11),
+            text_color="#666677",
+        ).pack(side="left")
+        self._inject_btn = ctk.CTkButton(
+            row4, text=t("ajiasu_inject"), height=28, corner_radius=6,
+            fg_color="#3D3D4D", hover_color="#4D4D5D",
+            border_width=1, border_color="#6B46FF",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#C9C9D9",
+            command=self._inject_ajiasu,
+        )
+        self._inject_btn.pack(side="right", padx=(4, 0))
+
         ctk.CTkLabel(self.ajiasu_settings, text="", height=4).pack()
 
     def _show_settings_for_mode(self):
@@ -936,6 +957,39 @@ class IntervalProxyGUI:
                 lines.append(f"Bridge info: failed ({res})")
             self.root.after(0, lambda: self._append_log(
                 "──── Bridge diagnostics ────\n" + "\n".join(lines)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _inject_ajiasu(self):
+        """运行时注入 sciter_bridge.dll 到爱加速进程(方案 B,无须改 res.fvr)。
+
+        与磁盘打补丁互斥关系:它们做的是同一件事(让桥脚本在 Sciter 里跑),只是
+        载入路径不同。两者都做不会冲突——重复注入桥脚本在我们的 IIFE 实现里
+        是幂等的(只会再起一个 fetch 链,服务端每次只回一个命令,旧的会被丢)。
+        但还是不建议两个都用,选一个就好。
+        """
+        if sys.platform != "win32":
+            self._append_log("✗ 运行时注入仅支持 Windows")
+            return
+        self._append_log("──── " + t("ajiasu_inject_start") + " ────")
+        try:
+            self._inject_btn.configure(state="disabled")
+        except Exception:
+            pass
+
+        def worker():
+            try:
+                ok, msg = ajiasu_injector.inject_into_ajiasu()
+                self.root.after(0, lambda: self._append_log(("✓ " if ok else "✗ ") + msg))
+                if ok:
+                    self.config.set("ajiasu_patch_ever_installed", True)
+                    self.config.save()
+                    # 注入后桥需要 1-2 秒才会发出第一次心跳;让用户知道在等。
+                    self.root.after(0, lambda: self._append_log(t("ajiasu_inject_wait")))
+            except Exception as e:
+                self.root.after(0, lambda err=e: self._append_log(f"✗ {err}"))
+            finally:
+                self.root.after(0, lambda: self._inject_btn.configure(state="normal"))
 
         threading.Thread(target=worker, daemon=True).start()
 

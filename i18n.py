@@ -56,6 +56,10 @@ TRANSLATIONS = {
         "ajiasu_unpatch_start": "开始卸载桥接",
         "ajiasu_view_log": "查看桥日志",
         "ajiasu_log_missing": "未找到桥日志: {path}\n(说明桥脚本在 AJiaSu 进程里还没跑起来 — 检查: 1) 是否点过\"安装桥接\"; 2) AJiaSu 是否启动并打开主窗口)",
+        "ajiasu_inject_hint": "运行时注入(实验)",
+        "ajiasu_inject": "注入桥接",
+        "ajiasu_inject_start": "开始运行时注入",
+        "ajiasu_inject_wait": "已注入,等待桥连接(1-2 秒)。详细日志见 %LocalAppData%\\AJiaSu\\inject.log",
         "ajiasu_group_label": "节点分组",
         "ajiasu_current_label": "当前节点",
 
@@ -159,6 +163,10 @@ TRANSLATIONS = {
         "ajiasu_unpatch_start": "Uninstalling bridge",
         "ajiasu_view_log": "View bridge log",
         "ajiasu_log_missing": "Bridge log not found: {path}\n(Means the bridge script never ran inside AJiaSu — check: 1) did you click \"Install Bridge\"? 2) is AJiaSu launched with main window open?)",
+        "ajiasu_inject_hint": "Runtime inject (experimental)",
+        "ajiasu_inject": "Inject bridge",
+        "ajiasu_inject_start": "Starting runtime injection",
+        "ajiasu_inject_wait": "Injected. Waiting for bridge to connect (1-2s). Details: %LocalAppData%\\AJiaSu\\inject.log",
         "ajiasu_group_label": "Node Group",
         "ajiasu_current_label": "Current Node",
 

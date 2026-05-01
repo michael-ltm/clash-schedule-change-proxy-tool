@@ -293,7 +293,107 @@ GUI 顶部状态显示"爱加速桥未响应"
 
 ---
 
-## 14. 已知不支持
+## 14. 运行时注入(方案 B,实验)
+
+**何时用**:磁盘补丁("安装桥接")显示成功,但桥从不连接、没有节点列表、`%LocalAppData%\AJiaSu\inject.log` 不存在(或者它存在但磁盘补丁路径下 `bridge.log` 不存在)。意味着 res.fvr 改了但 Sciter 没真的载入注入的 JS。
+
+### 架构
+
+```
+┌──────────────────┐    LoadLibraryW path    ┌──────────────────────┐
+│ ajiasu_injector  │  ────────────────────▶  │  HD_AJiaSu.exe       │
+│  (Python ctypes) │   CreateRemoteThread    │  ┌──────────────────┐│
+└──────────────────┘                         │  │ sciter_bridge.dll ││
+                                             │  │  - Find HWND      ││
+                                             │  │  - SciterEval(JS) ││
+                                             │  └──────────────────┘│
+                                             │           │           │
+                                             │           ▼           │
+                                             │   bridge.js 进入       │
+                                             │   Sciter VM,继续走     │
+                                             │   fetch IPC 到 62517   │
+                                             └──────────────────────┘
+```
+
+不动 res.fvr。**爱加速 auto-update 不会清掉它**(因为啥也没改),但**爱加速重启后必须重新点"注入桥接"**(下一版可以加 watcher 自动重注入)。
+
+### 文件清单
+
+| 文件 | 作用 |
+|---|---|
+| `bridge_inject/sciter_bridge.cpp` | Windows DLL 源:DllMain → 起 worker thread → 找 Sciter HWND → SciterEval(bridge.js) |
+| `bridge_inject/bridge_resource.rc` | 把 `ajiasu_bridge.js` 嵌成 RCDATA 资源 (id=1),DLL 启动时优先用磁盘上 `%LocalAppData%\AJiaSu\bridge.js`(便于 hot-edit),fallback 到嵌入资源 |
+| `bridge_inject/CMakeLists.txt` | 用 `FetchContent` 拉 Sciter SDK 头文件,build x64/x86 两套 DLL,扔到 `bridge_inject/dist/` |
+| `ajiasu_injector.py` | Python ctypes 注入器:`OpenProcess` + `VirtualAllocEx` + `WriteProcessMemory` + `CreateRemoteThread(LoadLibraryW)`。处理 32/64 位匹配 |
+| GUI 设置面板 → "注入桥接" 按钮 | 一键调用 `ajiasu_injector.inject_into_ajiasu()` |
+
+### 构建(Windows + MSVC)
+
+```cmd
+:: 在仓库根目录
+cmake -S bridge_inject -B build/bridge_x64 -A x64
+cmake --build build/bridge_x64 --config Release
+
+cmake -S bridge_inject -B build/bridge_x86 -A Win32
+cmake --build build/bridge_x86 --config Release
+
+:: 产物:bridge_inject/dist/sciter_bridge_x64.dll, sciter_bridge_x86.dll
+```
+
+CI 已经在 `.github/workflows/build.yml` 的 `build-windows` job 里串好,会先 build DLL 再 PyInstaller bundle。
+
+### 故障排查
+
+桥的注入日志在 **`%LocalAppData%\AJiaSu\inject.log`**。每次注入会 append,看最新一段。
+
+```
+[hh:mm:ss.fff pid=…] worker: starting
+[hh:mm:ss.fff pid=…] worker: SciterAPI=0x… api=0x… ver=…
+[hh:mm:ss.fff pid=…] worker: Sciter HWND=0x…
+[hh:mm:ss.fff pid=…] bridge.js: loaded from embedded resource (… bytes)
+[hh:mm:ss.fff pid=…] SciterEval -> OK
+[hh:mm:ss.fff pid=…] worker: done (eval OK)
+```
+
+各种失败模式:
+
+| 日志末行 | 原因 | 怎么修 |
+|---|---|---|
+| `sciter.dll not loaded in process` | 注入到了非 Sciter 进程,或爱加速还没启动到加载 sciter.dll | 等爱加速到主窗口再注入 |
+| `GetProcAddress(SciterAPI) failed` | sciter.dll 版本太老,符号名不一样 | 换 Sciter 5.x SDK 重 build,或加 fallback 名字 |
+| `no Sciter window after 30s` | 爱加速主窗口没出来 / class name 变了 | 打开主窗口再注入;若 class name 改了改 `sciter_bridge.cpp` 的 `EnumWindowsCb` |
+| `bridge.js: NOT FOUND` | DLL 没正确嵌入 RCDATA,且磁盘上也没有 | 检查 `bridge_resource.rc` 是否 build 进去 |
+| `SciterEval -> FALSE (script error)` | JS 跑了但抛异常 → Sciter 拒绝 | 用 `view.eval` 或 console 看异常;通常是 ajiasu_bridge.js 自身的语法/API 问题 |
+| `SetWindowLongPtr failed` | 找到的 HWND 不是真窗口,或权限不够 | 检查 EnumWindowsCb 命中的 class 是否真是 Sciter |
+| Python 端 "remote LoadLibrary returned 0" | DLL 加载失败 — 多半是 bitness 不匹配 / 缺 VC runtime / AV 拦截 | 见下面 AV 章节 |
+
+### 杀软兼容性
+
+`CreateRemoteThread + LoadLibraryW` 是经典手法,Microsoft Defender 不拦。第三方 AV(360、火绒、Norton、Kaspersky 等)可能会拦或弹提示。表现:Python 端 `inject_dll` 返回 `remote LoadLibrary returned 0` 或者爱加速直接被关。
+
+应对:
+- 把 `sciter_bridge_x64.dll` / `sciter_bridge_x86.dll` 加到 AV 白名单
+- 或者把整个 ClashProxyTimer.exe 加白名单
+- 长期方案:给 DLL 做代码签名(Authenticode),很多 AV 信任已签名的 DLL
+
+### 与磁盘补丁的关系
+
+两条路径做的是同一件事:让 `ajiasu_bridge.js` 在 Sciter VM 里运行。**选一个就行**——
+
+- 磁盘补丁:**爱加速重启自动加载**(只要补丁还在),但 auto-update 会擦
+- 运行时注入:**不动磁盘**,但每次爱加速重启都要重新注入
+
+如果两个都用了:不会冲突,但桥脚本会被运行 2 次 = 起 2 个 fetch 链。服务端每条命令只回一次,多出来的链会一直 poll "none"。无害但浪费。
+
+### 已知限制
+
+- **必须爱加速已经登录到主窗口**才能注入(没主窗口 = 没 Sciter HWND)。注入按钮点早了会等 30 秒然后报 `no Sciter window`
+- **一次性**:爱加速重启不自动重注入。下一版加个 watcher 监 PID 变化自动补
+- **跨 Sciter 大版本可能崩**:目前是按 Sciter 5.x(QuickJS)的 API struct 编的;爱加速若升到 Sciter 6.x 需重 build
+
+---
+
+## 15. 已知不支持
 
 - 爱加速登录界面阶段:桥脚本是跟着 `window-main.htm` 加载的,**必须登录进去主窗口**才会启动桥
 - 多账号 / 多实例并发:IPC 文件是固定路径,两个工具实例同时操作会乱
@@ -301,7 +401,7 @@ GUI 顶部状态显示"爱加速桥未响应"
 
 ---
 
-## 15. 仓库 / 当前版本
+## 16. 仓库 / 当前版本
 
 - repo: <https://github.com/michael-ltm/clash-schedule-change-proxy-tool>
 - 入口:`main.py` → `gui.py:IntervalProxyGUI`

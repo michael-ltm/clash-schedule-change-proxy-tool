@@ -13,13 +13,22 @@ is_windows = sys.platform == 'win32'
 
 block_cipher = None
 
+import os as _os
+_dll_dir = _os.path.join(_os.path.dirname(_os.path.abspath(SPEC)), 'bridge_inject', 'dist')
+_dll_datas = []
+if is_windows and _os.path.isdir(_dll_dir):
+    for _name in ('sciter_bridge_x64.dll', 'sciter_bridge_x86.dll'):
+        _p = _os.path.join(_dll_dir, _name)
+        if _os.path.isfile(_p):
+            _dll_datas.append((_p, '.'))
+
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
     datas=[
         ('ajiasu_bridge.js', '.'),
-    ],
+    ] + _dll_datas,
     hiddenimports=[
         'tkinter',
         'tkinter.ttk',

@@ -1,0 +1,42 @@
+// bridge_resource.rc — embeds ../ajiasu_bridge.js as a Win32 RCDATA resource
+// so the DLL is a single self-contained artifact.
+//
+// At runtime, sciter_bridge.cpp prefers loading bridge.js from
+// %LocalAppData%\AJiaSu\bridge.js (so devs can hot-edit without rebuilding)
+// and falls back to this embedded blob.
+//
+// Resource id 1 must match IDR_BRIDGE_JS in sciter_bridge.cpp.
+
+#include <windows.h>
+
+1 RCDATA "../ajiasu_bridge.js"
+
+// Version info — keep something minimal so AV scanners don't flag the DLL
+// as "unsigned & no version info". Optional but cheap.
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION     1,0,0,0
+ PRODUCTVERSION  1,0,0,0
+ FILEFLAGSMASK   0x3fL
+ FILEFLAGS       0x0L
+ FILEOS          VOS_NT_WINDOWS32
+ FILETYPE        VFT_DLL
+ FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "ClashProxyTimer"
+            VALUE "FileDescription",  "AJiaSu Sciter bridge injector"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "sciter_bridge"
+            VALUE "OriginalFilename", "sciter_bridge.dll"
+            VALUE "ProductName",      "ClashProxyTimer"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
