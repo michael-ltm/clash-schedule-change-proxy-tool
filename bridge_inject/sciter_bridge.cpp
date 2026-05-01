@@ -127,7 +127,11 @@ static bool LoadEmbeddedJs(std::string& out) {
                        GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCWSTR)&LoadEmbeddedJs, &self);
     if (!self) return false;
-    HRSRC r = FindResourceW(self, MAKEINTRESOURCEW(IDR_BRIDGE_JS), RT_RCDATA);
+    // RT_RCDATA expands to LPSTR (narrow) when UNICODE is not defined; we
+    // explicitly call the W variant of FindResource so we pass the wide form.
+    // Numeric value of RT_RCDATA is 10.
+    HRSRC r = FindResourceW(self, MAKEINTRESOURCEW(IDR_BRIDGE_JS),
+                            MAKEINTRESOURCEW(10));
     if (!r) return false;
     HGLOBAL g = LoadResource(self, r);
     if (!g) return false;
