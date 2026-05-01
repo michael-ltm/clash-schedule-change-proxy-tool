@@ -13,6 +13,7 @@ import customtkinter as ctk
 import threading
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -69,9 +70,8 @@ class IntervalProxyGUI:
         self.proxy_checker = ProxyChecker(self.clash_api)
         self.clash_switcher = ProxySwitcher(self.clash_api, self.proxy_checker, self.config)
 
-        self.ajiasu_api = AJiaSuAPI(
-            ipc_dir=self.config.get("ajiasu_ipc_dir") or None,
-        )
+        self.ajiasu_api = AJiaSuAPI()
+        self.ajiasu_api.start_server()
         self.ajiasu_switcher = AJiaSuProxySwitcher(self.ajiasu_api, self.config)
 
         # 当前激活的 backend / switcher
@@ -915,31 +915,29 @@ class IntervalProxyGUI:
                 pass
 
     def _view_bridge_log(self):
-        """打开桥日志文件 (C:\\Users\\Public\\AJiaSu\\bridge.log) 给用户看。"""
-        log_path = Path("C:/Users/Public/AJiaSu/bridge.log")
-        ipc_dir = log_path.parent
-        if not log_path.exists():
-            self._append_log(t("ajiasu_log_missing", path=str(log_path)))
-            try:
-                messagebox.showinfo(t("ajiasu_view_log"),
-                                    t("ajiasu_log_missing", path=str(log_path)))
-            except Exception:
-                pass
-            return
-        try:
-            content = log_path.read_text(encoding="utf-8", errors="replace")
-            # 把最近 ~50 行倒进 GUI 日志
-            tail = "\n".join(content.splitlines()[-50:])
-            self._append_log("──── bridge.log (tail) ────\n" + tail)
-            # 同时用系统默认应用打开整个文件,方便用户复制
-            if sys.platform == "win32":
-                import os
-                os.startfile(str(log_path))
-            elif sys.platform == "darwin":
-                import subprocess
-                subprocess.Popen(["open", str(log_path)])
-        except Exception as e:
-            self._append_log(f"读取桥日志失败: {e}")
+        """显示桥接诊断信息。"""
+        lines = []
+        lines.append(f"Bridge version: v{self.ajiasu_api._state.bridge_version}")
+        lines.append(f"Server started: {self.ajiasu_api._started}")
+        lines.append(f"Bridge connected: {self.ajiasu_api._state.bridge_connected}")
+        hb = self.ajiasu_api._state.last_heartbeat
+        if hb > 0:
+            age = time.time() - hb
+            lines.append(f"Last heartbeat: {age:.1f}s ago")
+        else:
+            lines.append("Last heartbeat: never")
+        lines.append(f"is_alive: {self.ajiasu_api.is_alive()}")
+
+        def worker():
+            ok, res = self.ajiasu_api._call("bridgeInfo")
+            if ok:
+                lines.append(f"Bridge info: {res}")
+            else:
+                lines.append(f"Bridge info: failed ({res})")
+            self.root.after(0, lambda: self._append_log(
+                "──── Bridge diagnostics ────\n" + "\n".join(lines)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _dump_ajiasu_raw(self):
         """把桥拿到的原始 JSON (server 列表 + 状态) 写到 %TEMP% 下,便于排查字段名映射。"""

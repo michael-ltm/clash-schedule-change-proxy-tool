@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pyinstaller build.spec)",
+      "Bash(python main.py)",
+      "Bash(\"D:\\\\code\\\\discuz\\\\clash-schedule-change-proxy-tool\\\\dist\\\\ClashProxyTimer.exe\")",
+      "Bash(echo \"EXIT CODE: $?\")",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(tasklist /FI \"IMAGENAME eq ClashProxyTimer.exe\")",
+      "Bash(tasklist /FI \"IMAGENAME eq HD_AJiaSu.exe\")",
+      "Bash(tasklist /FI \"IMAGENAME eq AJiaSu.exe\")",
+      "PowerShell(Get-WmiObject *)",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"C:\\\\Program Files \\(x86\\)\\\\AJiaSu\\\\res.fvr\"\\); $entry = $zip.GetEntry\\(\"window-main.htm\"\\); $reader = New-Object System.IO.StreamReader\\($entry.Open\\(\\)\\); $html = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); $lines = $html -split \"`n\"; for \\($i = 0; $i -lt $lines.Count; $i++\\) { if \\($lines[$i] -match \"bridge|BRIDGE|module|ajiasu|/head\"\\) { Write-Host \"Line $\\($i+1\\): $\\($lines[$i].Trim\\(\\)\\)\" } })",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"C:\\\\Program Files \\(x86\\)\\\\AJiaSu\\\\res.fvr\"\\); $entry = $zip.GetEntry\\(\"window-main.htm\"\\); $reader = New-Object System.IO.StreamReader\\($entry.Open\\(\\)\\); $html = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); $lines = $html -split \"`n\"; for \\($i = 535; $i -lt 560 -and $i -lt $lines.Count; $i++\\) { Write-Host \"Line $\\($i+1\\): $\\($lines[$i]\\)\" })",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"C:\\\\Program Files \\(x86\\)\\\\AJiaSu\\\\res.fvr\"\\); foreach \\($name in @\\(\"common.js\", \"common-dialog.js\"\\)\\) { $e = $zip.GetEntry\\($name\\); if \\($e\\) { $reader = New-Object System.IO.StreamReader\\($e.Open\\(\\)\\); $c = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $lines = $c -split \"`n\"; Write-Host \"=== $name \\(first 30 lines\\) ===\"; for \\($i=0; $i -lt 30 -and $i -lt $lines.Count; $i++\\) { Write-Host \"  $\\($lines[$i]\\)\" } } }; $zip.Dispose\\(\\))",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"C:\\\\Program Files \\(x86\\)\\\\AJiaSu\\\\res.fvr\"\\); $e = $zip.GetEntry\\(\"ajiasu_bridge.js\"\\); $reader = New-Object System.IO.StreamReader\\($e.Open\\(\\)\\); $c = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); $c.Substring\\(0, 200\\))",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Start-Process \"C:\\\\Program Files \\(x86\\)\\\\AJiaSu\\\\HD_AJiaSu.exe\")",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"C:\\\\Program Files \\(x86\\)\\\\AJiaSu\\\\res.fvr\"\\); $entry = $zip.GetEntry\\(\"window-main.htm\"\\); $reader = New-Object System.IO.StreamReader\\($entry.Open\\(\\)\\); $html = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); $lines = $html -split \"`n\"; for \\($i = 0; $i -lt $lines.Count; $i++\\) { if \\($lines[$i] -match \"\\\\<script\"\\) { Write-Host \"Line $\\($i+1\\): $\\($lines[$i].Trim\\(\\)\\)\" } })",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"C:\\\\Program Files \\(x86\\)\\\\AJiaSu\\\\res.fvr\"\\); $entry = $zip.GetEntry\\(\"window-main.htm\"\\); $reader = New-Object System.IO.StreamReader\\($entry.Open\\(\\)\\); $html = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); $lines = $html -split \"`n\"; for \\($i = 674; $i -lt 710 -and $i -lt $lines.Count; $i++\\) { Write-Host \"Line $\\($i+1\\): $\\($lines[$i]\\)\" })",
+      "Bash(where python *)",
+      "Bash(where py *)",
+      "Bash(C:/Users/Administrator/AppData/Local/Programs/Python/Python312/python.exe *)"
+    ]
+  }
+}

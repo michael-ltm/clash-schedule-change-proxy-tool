@@ -1,28 +1,26 @@
 """
-AJiaSu 控制 API (文件 IPC 客户端)。
+AJiaSu 控制 API (HTTP IPC)。
 
 接口形态尽量贴近 ClashAPI,这样上层可以用相似的方式调度。
-通信对端是 AJiaSu 进程内的 ajiasu_bridge.js,见 ajiasu_bridge.js 顶部注释。
+通信对端是 AJiaSu 进程内的 ajiasu_bridge.js (v4+),
+桥通过 fetch() 轮询本地 HTTP 服务器获取命令、提交结果。
 """
 
 import json
 import logging
-import os
 import threading
 import time
 import uuid
-from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_IPC_DIR = Path("C:/Users/Public/AJiaSu")
+IPC_PORT = 62517
 GROUP_ALL = "[ALL]"
 GROUP_FAVORITES = "[FAVORITES]"
 GROUP_RECENT = "[RECENT]"
 
-# 服务器对象里可能用的字段名(原始 xcall 返回的 JSON 我们不可完全确定,
-# 所以做容错)
 ID_FIELDS = ["Id", "id", "ServerId", "srvId", "serverId"]
 NAME_FIELDS = ["Name", "name", "ServerName", "title", "Title"]
 CATEGORY_FIELDS = ["CategoryCode", "categoryCode", "Category", "category", "Area", "area", "AreaCode", "areaCode"]
@@ -58,108 +56,205 @@ def server_category(s: Any) -> str:
     return ""
 
 
-class AJiaSuAPI:
-    """通过文件 IPC 控制 AJiaSu。"""
+class _BridgeState:
+    """Shared state between the HTTP handler and the API."""
 
-    def __init__(self, ipc_dir: Optional[str] = None, request_timeout: float = 8.0):
-        self.ipc_dir = Path(ipc_dir) if ipc_dir else DEFAULT_IPC_DIR
-        self.cmd_path = self.ipc_dir / "cmd.json"
-        self.result_path = self.ipc_dir / "result.json"
-        self.ready_path = self.ipc_dir / "ready.txt"
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.pending_cmd: Optional[dict] = None
+        self.result: Optional[dict] = None
+        self.result_event = threading.Event()
+        self.cmd_available = threading.Event()
+        self.last_heartbeat: float = 0.0
+        self.bridge_connected: bool = False
+        self.bridge_version: int = 0
+
+
+class _BridgeHandler(BaseHTTPRequestHandler):
+    state: _BridgeState
+
+    def _handle_poll(self, raw_body=b""):
+        if "hb=1" in self.path:
+            self.server._state.last_heartbeat = time.time()
+            self.server._state.bridge_connected = True
+
+        if raw_body:
+            try:
+                data = json.loads(raw_body)
+                with self.server._state.lock:
+                    self.server._state.result = data
+                self.server._state.result_event.set()
+            except Exception:
+                pass
+
+        with self.server._state.lock:
+            cmd = self.server._state.pending_cmd
+            if cmd:
+                body = json.dumps(cmd).encode()
+                self.server._state.pending_cmd = None
+                self._respond(200, body)
+                return
+
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            self.server._state.cmd_available.wait(timeout=0.1)
+            self.server._state.cmd_available.clear()
+            with self.server._state.lock:
+                cmd = self.server._state.pending_cmd
+                if cmd:
+                    body = json.dumps(cmd).encode()
+                    self.server._state.pending_cmd = None
+                    self._respond(200, body)
+                    return
+        self._respond(200, b"none")
+
+    def do_GET(self):
+        if self.path.startswith("/bridge/poll"):
+            self._handle_poll()
+        elif self.path == "/ping":
+            self._respond(200, b"pong")
+        else:
+            self._respond(404, b"not found")
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length) if length else b""
+        if self.path.startswith("/bridge/poll"):
+            self._handle_poll(raw)
+        elif self.path == "/bridge/result":
+            try:
+                data = json.loads(raw)
+            except Exception:
+                data = {"ok": False, "error": "bad json from bridge"}
+            with self.server._state.lock:
+                self.server._state.result = data
+            self.server._state.result_event.set()
+            self._respond(200, b"ok")
+        elif self.path == "/bridge/hello":
+            try:
+                info = json.loads(raw)
+                self.server._state.bridge_version = info.get("version", 0)
+            except Exception:
+                pass
+            self.server._state.last_heartbeat = time.time()
+            self.server._state.bridge_connected = True
+            logger.info("AJiaSu bridge connected (v%s)", self.server._state.bridge_version)
+            with self.server._state.lock:
+                cmd = self.server._state.pending_cmd
+                if cmd:
+                    body = json.dumps(cmd).encode()
+                    self.server._state.pending_cmd = None
+                else:
+                    body = b"ok"
+            self._respond(200, body)
+        else:
+            self._respond(404, b"not found")
+
+    def _respond(self, code: int, body: bytes):
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        pass
+
+
+class AJiaSuAPI:
+    """通过 HTTP IPC 控制 AJiaSu。"""
+
+    def __init__(self, port: int = IPC_PORT, request_timeout: float = 8.0):
+        self.port = port
         self.request_timeout = request_timeout
+        self._state = _BridgeState()
+        self._server: Optional[HTTPServer] = None
+        self._server_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
+        self._started = False
+
+    def start_server(self):
+        if self._started:
+            return
+        self._state.last_heartbeat = 0.0
+        self._state.bridge_connected = False
+        try:
+            self._server = HTTPServer(("127.0.0.1", self.port), _BridgeHandler)
+            self._server._state = self._state
+            self._server_thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+            self._server_thread.start()
+            self._started = True
+            logger.info("AJiaSu IPC server started on 127.0.0.1:%d", self.port)
+        except OSError as e:
+            logger.error("Failed to start IPC server on port %d: %s", self.port, e)
+
+    def stop_server(self):
+        if self._server:
+            self._server.shutdown()
+            self._server = None
+            self._started = False
+
+    def _ensure_server(self):
+        if not self._started:
+            self.start_server()
 
     # -------------------- 底层 RPC --------------------
 
-    def _ensure_dir(self):
-        try:
-            self.ipc_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-
     def _call(self, action: str, **kwargs) -> Tuple[bool, Any]:
-        """
-        发送一次请求,等待响应。返回 (ok, result_or_error)。
-        """
-        self._ensure_dir()
+        self._ensure_server()
         with self._lock:
             req_id = uuid.uuid4().hex
             payload = {"id": req_id, "action": action}
             payload.update(kwargs)
 
-            # 清理可能残留的旧响应
-            try:
-                if self.result_path.exists():
-                    self.result_path.unlink()
-            except Exception:
-                pass
-
-            try:
-                tmp = self.cmd_path.with_suffix(".json.tmp")
-                tmp.write_text(json.dumps(payload), encoding="utf-8")
-                os.replace(tmp, self.cmd_path)
-            except Exception as e:
-                return False, f"写入命令文件失败: {e}"
+            self._state.result_event.clear()
+            with self._state.lock:
+                self._state.result = None
+                self._state.pending_cmd = payload
+            self._state.cmd_available.set()
 
             deadline = time.time() + self.request_timeout
-            while time.time() < deadline:
-                if self.result_path.exists():
-                    try:
-                        text = self.result_path.read_text(encoding="utf-8")
-                        data = json.loads(text)
-                    except Exception:
-                        time.sleep(0.05)
+            while True:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                if self._state.result_event.wait(timeout=min(remaining, 0.5)):
+                    self._state.result_event.clear()
+                    with self._state.lock:
+                        data = self._state.result
+                        self._state.result = None
+                    if data is None:
                         continue
-
                     if data.get("id") and data["id"] != req_id:
-                        # 旧响应,等下一轮
-                        time.sleep(0.05)
                         continue
-
-                    try:
-                        self.result_path.unlink()
-                    except Exception:
-                        pass
-
                     if data.get("ok"):
                         return True, data.get("result")
                     return False, data.get("error", "unknown error")
 
-                time.sleep(0.08)
-
-            # 超时:把命令文件清掉以免干扰下一次
-            try:
-                if self.cmd_path.exists():
-                    self.cmd_path.unlink()
-            except Exception:
-                pass
+            with self._state.lock:
+                self._state.pending_cmd = None
             return False, f"请求超时(>{self.request_timeout}s),爱加速桥可能未运行"
 
     # -------------------- 状态 / 测试 --------------------
 
     def test_connection(self) -> bool:
-        """探活(强):mtime + ping 往返。用在初始化/手动检查这种愿意等的地方。"""
-        try:
-            if not self.ready_path.exists():
-                return False
-            mtime = self.ready_path.stat().st_mtime
-            return (time.time() - mtime) < 60.0 and self._call("ping")[0]
-        except Exception:
+        self._ensure_server()
+        if not self._state.bridge_connected:
             return False
+        if (time.time() - self._state.last_heartbeat) > 60.0:
+            return False
+        for attempt in range(3):
+            ok, _ = self._call("ping")
+            if ok:
+                return True
+            time.sleep(1)
+        return False
 
     def is_alive(self, max_age_sec: float = 5.0) -> bool:
-        """
-        探活(轻量,无 IPC 往返)。只看 ready.txt 的 mtime 是否在 max_age_sec
-        以内。桥每 ~2s 心跳一次,所以 5s 是稳的。
-        用在背景轮询里,避免每次 sync 都做一次 ping 往返。
-        """
-        try:
-            if not self.ready_path.exists():
-                return False
-            mtime = self.ready_path.stat().st_mtime
-            return (time.time() - mtime) < max_age_sec
-        except Exception:
+        if not self._started or not self._state.bridge_connected:
             return False
+        return (time.time() - self._state.last_heartbeat) < max_age_sec
 
     def get_version(self) -> Optional[Dict]:
         ok, res = self._call("version")
@@ -175,7 +270,6 @@ class AJiaSuAPI:
             return []
         if isinstance(res, list):
             return res
-        # 有些 xcall 可能返回 {servers: [...]} 之类
         if isinstance(res, dict):
             for k in ("servers", "list", "data"):
                 if isinstance(res.get(k), list):
@@ -190,7 +284,6 @@ class AJiaSuAPI:
         ok, res = self._call("recent")
         if not ok or not isinstance(res, list):
             return []
-        # recent 可能是 ID 列表也可能是对象列表
         out = []
         for item in res:
             sid = server_id(item)
@@ -201,7 +294,6 @@ class AJiaSuAPI:
     # -------------------- ClashAPI 兼容接口 --------------------
 
     def get_proxies(self) -> Optional[Dict]:
-        """与 ClashAPI 兼容:返回 {"proxies": {name: {...}}}。"""
         servers = self.get_all_servers()
         proxies: Dict[str, Dict] = {}
         for s in servers:
@@ -219,10 +311,6 @@ class AJiaSuAPI:
         return {"proxies": proxies}
 
     def get_proxy_groups(self) -> List[Dict]:
-        """
-        把可选的"分组"做成 ClashAPI 风格。
-        固定有 [ALL] / [FAVORITES] / [RECENT],其余按 categoryCode 分。
-        """
         servers = self.get_all_servers()
         names_by_cat: Dict[str, List[str]] = {}
         all_names: List[str] = []
@@ -282,7 +370,6 @@ class AJiaSuAPI:
 
     def get_current_server_name(self) -> Optional[str]:
         stats = self.get_status() or {}
-        # 字段名我们不能完全确定;尝试几个可能性
         for k in ("ServerName", "serverName", "name", "Name"):
             if isinstance(stats, dict) and stats.get(k):
                 return str(stats[k])
@@ -302,7 +389,6 @@ class AJiaSuAPI:
         return self.get_current_server_name()
 
     def switch_proxy(self, _group_name: str, proxy_name: str) -> bool:
-        """按 name 在所有服务器里找到 ID,然后 vpnConnect。"""
         sid = self._name_to_id(proxy_name)
         if not sid:
             logger.error(f"找不到节点的 srvId: {proxy_name}")
@@ -321,14 +407,12 @@ class AJiaSuAPI:
         return None
 
     def get_proxy_delay(self, proxy_name: str, *_args, **_kwargs) -> Optional[int]:
-        """ping 单个节点,返回延迟 ms。"""
         sid = self._name_to_id(proxy_name)
         if not sid:
             return None
         ok, _res = self._call("pingServers", ids=[sid])
         if not ok:
             return None
-        # 等一下 native 那边把 ping 结果写回来
         deadline = time.time() + 6.0
         while time.time() < deadline:
             ok2, reports = self._call("pingReports")
@@ -366,10 +450,7 @@ class AJiaSuAPI:
         ok, res = self._call("pingReports")
         return res if ok and isinstance(res, list) else []
 
-    # -------------------- 其它 --------------------
+    # -------------------- 兼容旧接口 --------------------
 
-    def update_config(self, ipc_dir: str):
-        self.ipc_dir = Path(ipc_dir) if ipc_dir else DEFAULT_IPC_DIR
-        self.cmd_path = self.ipc_dir / "cmd.json"
-        self.result_path = self.ipc_dir / "result.json"
-        self.ready_path = self.ipc_dir / "ready.txt"
+    def update_config(self, ipc_dir: str = ""):
+        pass

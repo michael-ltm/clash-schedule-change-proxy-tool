@@ -9,7 +9,7 @@
 
 让本工具(原本只支持 Clash Verge)用相同的 UX —— 选分组、设间隔、定时切换 —— 来自动切换 **爱加速 (AJiaSu)** 客户端的节点。
 
-爱加速本身**没有公开 HTTP API**,所以我们走"代码注入 + 文件 IPC"的路子。
+爱加速本身**没有公开 HTTP API**,所以我们走"代码注入 + HTTP IPC"的路子。
 
 ---
 
@@ -20,10 +20,10 @@
 │  我们的工具 (Python + customtkinter)       │         │  爱加速进程 (Windows GUI app)          │
 │                                          │         │                                     │
 │  ┌────────────────┐                      │         │  ┌────────────────────────────┐     │
-│  │ AJiaSuAPI       │  写 cmd.json         │  IPC    │  │ ajiasu_bridge.js (注入)     │    │
-│  │ (Python 端)     │ ───────────────────►│ 文件目录│  │ - setInterval 轮询命令       │    │
-│  │                 │                      │         │  │ - 调 xcall 触达 native      │    │
-│  │ 等 result.json  │ ◄───────────────────│         │  │ - 写 result.json / ready.txt│    │
+│  │ AJiaSuAPI       │  HTTP server         │  HTTP   │  │ ajiasu_bridge.js (注入)     │    │
+│  │ (Python 端)     │  127.0.0.1:62517     │  IPC    │  │ - document.timer 定时轮询   │    │
+│  │                 │ ◄──── fetch() ───────│         │  │ - 调 xcall 触达 native      │    │
+│  │ 发命令/收结果    │ ────── resp ────────►│         │  │ - 结果随下次 poll 回传      │    │
 │  └────────────────┘                      │         │  └────────────────────────────┘     │
 │        │                                 │         │            │                        │
 │        ▼                                 │         │            ▼ xcall                  │
@@ -37,9 +37,10 @@
 
 **关键点**:
 - 爱加速 UI 是 [Sciter](https://sciter.com/) 引擎(QuickJS 内核)绘制,UI 资源在 `res.fvr` (其实是 zip)
-- 我们把 `ajiasu_bridge.js` 塞进这个 zip,并修改 `window-main.htm` 加一句 `<script src="ajiasu_bridge.js">`
-- 爱加速启动 → 加载主窗口 → 我们的脚本一并执行 → 它通过 `Window.this.xcall(...)` 调用 native 端
-- 通信通道是文件:`C:\Users\Public\AJiaSu\` 下的 `cmd.json` / `result.json` / `ready.txt` / `bridge.log`
+- 我们把 `ajiasu_bridge.js` 的内容注入到 `window-main.htm` 的 body `<script>` 块末尾(Sciter 不执行新增的 `<script>` 标签)
+- 爱加速启动 → 加载主窗口 → 我们的代码一并执行 → 它通过 `Window.this.xcall(...)` 调用 native 端
+- 通信通道是 HTTP:`127.0.0.1:62517` 上的轮询式 IPC(桥用 `fetch()` 轮询,Python 端用内嵌 HTTP server)
+- **为什么不用文件 IPC**:这个版本的 Sciter 的 `@sys` 模块没有 `fs.$writefile`,只有只读文件 API
 
 ---
 
@@ -69,10 +70,10 @@
 
 | 文件 | 作用 |
 |---|---|
-| `ajiasu_bridge.js` | 桥脚本,运行在爱加速 Sciter 进程里。**我们的代码在它里面;打补丁就是把它注入到 res.fvr 并改 window-main.htm 引用** |
-| `ajiasu_patcher.py` | 打/卸补丁:zip 重写 `res.fvr`,在 `</head>` 前插入 `<script src="ajiasu_bridge.js">`,首次会备份 `res.fvr.bak`。幂等。提供 `can_write()` / `is_patched()` |
+| `ajiasu_bridge.js` | 桥脚本,运行在爱加速 Sciter 进程里。**代码被内联注入到 window-main.htm 的 body `<script>` 块末尾**,通过 `fetch()` 与 Python HTTP server 通信 |
+| `ajiasu_patcher.py` | 打/卸补丁:zip 重写 `res.fvr`,在最后一个 `</script>` 之前注入桥代码(用 `/* AJIASU-BRIDGE-START/END */` 标记),首次会备份 `res.fvr.bak`。幂等。提供 `can_write()` / `is_patched()` |
 | `ajiasu_detector.py` | 自动检测安装目录(WMIC 优先 + 候选扫描),检测进程是否在跑 |
-| `ajiasu_api.py` | Python 端 IPC 客户端。接口形态与 `ClashAPI` 对齐,GUI 可用同一套调度器 |
+| `ajiasu_api.py` | Python 端 HTTP IPC 服务端。内嵌 HTTP server 在 `127.0.0.1:62517`,接口形态与 `ClashAPI` 对齐,GUI 可用同一套调度器 |
 | `win_admin.py` | UAC:`is_admin()` / `relaunch_as_admin()` (`ShellExecute runas`) / `can_write_path()` |
 | `scheduler.py` | `ProxySwitcher` (Clash) + `AJiaSuProxySwitcher` (AJiaSu) + `ProxyScheduler` (秒级倒计时,纯 Python timer) |
 | `gui.py` | customtkinter 界面,顶部 SegmentedButton 切 Clash / 爱加速 |
@@ -81,40 +82,46 @@
 
 ---
 
-## 5. 桥脚本 v2 (`ajiasu_bridge.js`) 关键设计
+## 5. 桥脚本 v14 (`ajiasu_bridge.js`) 关键设计
 
 ```js
-// 核心循环 — document.timer 与 window-main.htm 自身使用的方式一致 (兼容性最稳)
-function startTimer() {
-    function loop() { try { tick(); } catch(e) { log(...) } return true; }
-    document.timer(POLL_MS, loop);  // 失败再 fallback setInterval
-}
+// 核心架构: 连续 fetch 链 + document.timer 看门狗
+// - 正常运行: fetch().then() → doFetch() → fetch().then() → ... (无限链)
+// - 错误恢复: .catch() 设置 _loopActive=false → 看门狗每5s重启一次
+// - 服务器返回命令(JSON)或 "none"
+// - 有命令就 dispatch → 结果存 _pendingResult,下次 fetch 用 POST 发送
 
-// 早期写入 ready.txt,即使后续逻辑挂掉也能看到"我活过"
-function boot() {
-    const dir = pickIpcDir();        // 反斜杠/正斜杠两种都试
-    setPaths(dir);
-    fsWrite(READY_PATH, ...);        // 立即心跳
-    log("==== bridge boot v2 ====");
-    log("sys.fs keys: " + ...);      // 出错时知道哪些 API 不存在
-    try { safeXcall("getClientVersion"); } catch(e) { log(...); }
-    startTimer();
+function doFetch() {
+    _loopActive = true;
+    fetch(BASE + "/bridge/poll?hb=1", opts)
+        .then(r => r.text())
+        .then(body => { /* dispatch if command */ doFetch(); })
+        .catch(() => { _loopActive = false; }); // 看门狗会重启
 }
+// 看门狗: 每5s检查一次
+document.timer(5000, function() {
+    if (!_loopActive) doFetch();
+    return true;
+});
 ```
 
-**所有 fs 操作和 xcall 都包了 try/catch**,异常落到 `bridge.log`。
+**Sciter promise 特性**: fetch() 返回的 Promise 的 .then() 回调首次解析延迟 ~5s(Sciter 空闲事件循环阶段才处理 microtask),但一旦开始执行,后续 .then() 在同一批次内立即执行。因此连续 fetch 链在稳态下可达 ~40ms 命令响应。
+
+**服务器端长轮询**: 无命令时,Python HTTP 服务器 hold 2s 再返回 "none",用 `cmd_available` Event 实现新命令到达时立即唤醒。
+
+**为什么用 HTTP 而不用文件 IPC**: 这个版本的 Sciter(爱加速 4.9.6.0)的 `@sys.fs` 模块**没有 `$writefile`**,只有只读 API。`fetch()` 可以正常访问 localhost。
+
+**为什么注入到 body `<script>` 而不是新增 `<script>` 标签**: Sciter 不执行运行时新增到 DOM 的 `<script>` 标签。唯一能执行注入代码的方式是追加到**已有的 `<script>` 块**末尾。
+
+**注入代码中不能出现 `<script>` 字面量**: Sciter 的 HTML 解析器会把 JS 注释/字符串中的 `<script>` 当作标签解析,导致整个脚本块被截断。
 
 ### 协议
 
-请求文件 `cmd.json`:
-```json
-{ "id": "<uuid>", "action": "connect", "srvId": "12345" }
-```
+桥每 400ms 轮询 Python HTTP server:
 
-响应文件 `result.json`:
-```json
-{ "id": "<uuid>", "ok": true, "result": { ... } }
-```
+- `GET /bridge/poll?hb=1` → 服务器返回命令 JSON 或 `"none"`
+- `POST /bridge/poll?hb=1` (body = 上次结果) → 服务器收结果 + 返回下条命令
+- `POST /bridge/hello` → 桥启动时发送,附带版本信息
 
 支持的 action:`ping` / `version` / `accountName` / `list` / `fullList` / `favorites` / `recent` / `status` / `pingReports` / `isPicking` / `connect` / `disconnect` / `cancelPick` / `pick` / `pingServers` / `getConfig` / `setConfig` / `getConfigs` / `bridgeInfo` / `xcall`(任意 escape hatch)。
 
@@ -122,7 +129,7 @@ function boot() {
 
 ## 6. 我们依赖的 native xcall 名字 (反汇编 AJiaSu_4.9.6.0 得到)
 
-如果爱加速更新后改了名字,这些调用就会失败 — 在 `bridge.log` 里能看到。
+如果爱加速更新后改了名字,这些调用就会失败 — 用 GUI 的"查看桥日志"按钮可以看到诊断信息。
 
 ```
 vpnConnect(srvId)           // 连节点
@@ -150,18 +157,20 @@ GUI 提供 **"导出原始数据"** 按钮:把 `getOrderedAllServers / getVpnSta
 
 ---
 
-## 7. IPC 文件位置
+## 7. HTTP IPC 通信
 
-`C:\Users\Public\AJiaSu\`(任何 Windows 账号都能读写,不用提权):
+Python 端在 `127.0.0.1:62517` 启动一个 HTTP server(`AJiaSuAPI.start_server()`),桥脚本通过 `fetch()` 连续轮询(long-polling)。
 
-| 文件 | 写者 | 读者 | 用途 |
-|---|---|---|---|
-| `cmd.json` | Python | 桥(轮询) | 一次请求 |
-| `result.json` | 桥 | Python | 一次响应 |
-| `ready.txt` | 桥 | Python | 心跳(每 ~2s 刷新一次 mtime) |
-| `bridge.log` | 桥 | 用户/AI | 桥的诊断日志(错误、API 探查、boot 流程) |
+| 端点 | 方法 | 用途 |
+|---|---|---|
+| `/bridge/poll?hb=1` | GET 或 POST | 桥轮询命令 + 提交上次结果;`hb=1` 同时作为心跳。无命令时服务器 hold 2s 再返回 |
+| `/ping` | GET | 简单探活 |
 
-Python 端用 `is_alive()` 检查 `ready.txt` 的 mtime,5s 内新鲜就认为桥在线;短路后续 IPC,避免桥死时 GUI 卡 8s。
+Python 端用 `is_alive()` 检查上次心跳时间是否在 5s 以内。
+
+**注意**: 端口 62517 是固定的,不支持多实例同时运行。
+
+**性能**: 稳态下命令响应延迟 ~40ms,首次连接需 ~5s(Sciter promise 初始化)。
 
 ---
 
